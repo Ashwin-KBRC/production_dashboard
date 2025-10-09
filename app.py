@@ -31,39 +31,65 @@ if uploaded_file:
         # Remove Fridays (off day)
         df = df[df["Date"].dt.day_name() != "Friday"]
 
-        # Remove any total row for visual clarity (optional)
+        # Remove TOTAL row for clarity
         df_display = df[df["Plant"].str.upper() != "TOTAL"]
 
         # --- Display Data Table ---
         st.subheader("📋 Production Data Table")
         st.dataframe(df_display, use_container_width=True)
 
+        # --- Totals Display ---
+        total_daily = df_display["Production for the Day"].sum()
+        total_acc = df_display["Accumulative Production"].sum()
+
+        st.markdown(f"### 🔹 Total Production for the Day: **{total_daily:.2f} m³**")
+        st.markdown(f"### 🔹 Total Accumulative Production: **{total_acc:.2f} m³**")
+
         # --- Daily Charts Section ---
         st.subheader("🌈 Daily Production Charts")
         color_scheme = px.colors.qualitative.Bold
 
         # Pie Chart
-        pie_chart = px.pie(df_display, names="Plant", values="Production for the Day",
-                           title="Plant-wise Production (Pie Chart)",
-                           color_discrete_sequence=color_scheme)
+        pie_chart = px.pie(
+            df_display, 
+            names="Plant", 
+            values="Production for the Day",
+            title="Plant-wise Production (Pie Chart)",
+            color_discrete_sequence=color_scheme
+        )
         st.plotly_chart(pie_chart, use_container_width=True)
 
         # Bar Chart
-        bar_chart = px.bar(df_display, x="Plant", y="Production for the Day", color="Plant",
-                           title="Production per Plant (Bar Chart)",
-                           color_discrete_sequence=color_scheme)
+        bar_chart = px.bar(
+            df_display, 
+            x="Plant", 
+            y="Production for the Day", 
+            color="Plant",
+            title="Production per Plant (Bar Chart)",
+            color_discrete_sequence=color_scheme
+        )
         st.plotly_chart(bar_chart, use_container_width=True)
 
         # Line Chart
-        line_chart = px.line(df_display, x="Plant", y="Production for the Day", markers=True,
-                             title="Production Trend (Line Chart)",
-                             color_discrete_sequence=color_scheme)
+        line_chart = px.line(
+            df_display, 
+            x="Plant", 
+            y="Production for the Day", 
+            markers=True,
+            title="Production Trend (Line Chart)",
+            color_discrete_sequence=color_scheme
+        )
         st.plotly_chart(line_chart, use_container_width=True)
 
         # Area Chart
-        area_chart = px.area(df_display, x="Plant", y="Production for the Day", color="Plant",
-                             title="Production Flow (Area Chart)",
-                             color_discrete_sequence=color_scheme)
+        area_chart = px.area(
+            df_display, 
+            x="Plant", 
+            y="Production for the Day", 
+            color="Plant",
+            title="Production Flow (Area Chart)",
+            color_discrete_sequence=color_scheme
+        )
         st.plotly_chart(area_chart, use_container_width=True)
 
         # --- Highlight Top Producer ---
@@ -72,9 +98,14 @@ if uploaded_file:
 
         # --- Accumulative Chart ---
         st.subheader("📈 Accumulative Production Overview")
-        acc_chart = px.bar(df_display, x="Plant", y="Accumulative Production", color="Plant",
-                           title="Accumulative Production per Plant",
-                           color_discrete_sequence=color_scheme)
+        acc_chart = px.bar(
+            df_display, 
+            x="Plant", 
+            y="Accumulative Production", 
+            color="Plant",
+            title="Accumulative Production per Plant",
+            color_discrete_sequence=color_scheme
+        )
         st.plotly_chart(acc_chart, use_container_width=True)
 
 else:
