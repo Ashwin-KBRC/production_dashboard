@@ -1,336 +1,188 @@
-# app.py
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import os
 from datetime import datetime
-import traceback
+import matplotlib.pyplot as plt
+import subprocess
 
-# Optional Git push support (GitPython)
-try:
-    from git import Repo
-    GITPYTHON_AVAILABLE = True
-except Exception:
-    GITPYTHON_AVAILABLE = False
+# ------------------------------------------------------------
+# CONFIGURATION
+# ------------------------------------------------------------
+st.set_page_config(page_title="Production Dashboard", layout="wide")
 
-# -----------------------
-# Config
-# -----------------------
-st.set_page_config(page_title="Concrete Production Dashboard", layout="wide")
-DATA_DIR = "data"  # folder in repo where historical CSVs are stored
-os.makedirs(DATA_DIR, exist_ok=True)
+# GitHub Repo details
+GITHUB_REPO = "Ashwin-KBRC/production_dashboard"   # <-- your repo path
+DATA_FOLDER = "data"
+TOKEN = os.getenv("GITHUB_TOKEN")  # loaded from Streamlit Secrets
 
-REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
-
-# -----------------------
-# Helper functions
-# -----------------------
-def read_saved_dates():
-    files = [f for f in os.listdir(DATA_DIR) if f.endswith(".csv")]
-    # filenames assumed like YYYY-MM-DD.csv or YYYY-MM-DD_production.csv
-    dates = []
-    for f in files:
-        name = f.replace(".csv", "")
-        # if name includes extra suffix, take the leading date part
-        parts = name.split("_")
-        dates.append(parts[0])
-    # sort descending
-    dates = sorted(list(set(dates)), reverse=True)
-    return dates
-
-def load_data_for_date(date_str):
-    # look for file matching date_str (either exact or starting with date_str_)
-    candidates = [f for f in os.listdir(DATA_DIR) if f.endswith(".csv") and f.startswith(date_str)]
-    if not candidates:
-        return None, None
-    path = os.path.join(DATA_DIR, candidates[0])
-    df = pd.read_csv(path)
-    # convert Date column to datetime if exists
-    if "Date" in df.columns:
-        try:
-            df["Date"] = pd.to_datetime(df["Date"]).dt.date
-        except Exception:
-            pass
-    return df, path
-
-def save_upload_df(df, date_obj):
-    date_str = date_obj.strftime("%Y-%m-%d")
-    filename = f"{date_str}.csv"
-    save_path = os.path.join(DATA_DIR, filename)
-    # ensure date column stored as ISO string
-    df_to_save = df.copy()
-    df_to_save["Date"] = date_obj.strftime("%Y-%m-%d")
-    df_to_save.to_csv(save_path, index=False)
-    return save_path
-
-def attempt_push_to_github(file_path, commit_message="Add production data"):
-    """
-    Attempts to commit & push the file to the repo using GitPython.
-    This will only succeed if the deployed environment has git credentials configured.
-    If GitPython is not available or push fails, we return False and the error.
-    """
-    if not GITPYTHON_AVAILABLE:
-        return False, "GitPython not installed in environment."
-    try:
-        repo = Repo(".")
-        repo.git.add(file_path)
-        repo.index.commit(commit_message)
-        origin = repo.remote(name="origin")
-        origin.push()
-        return True, "Pushed to GitHub."
-    except Exception as e:
-        return False, str(e)
-
-# -----------------------
-# Theme presets (color palettes)
-# -----------------------
-COLOR_THEMES = {
-    "Default": px.colors.qualitative.Bold,
-    "Blue": px.colors.sequential.Blues[3:] if hasattr(px.colors, "sequential") else px.colors.qualitative.Plotly,
-    "Dark": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"],
-    "Vibrant": ["#EF476F","#FFD166","#06D6A0","#118AB2","#073B4C","#9B5DE5"]
+# ------------------------------------------------------------
+# THEMES
+# ------------------------------------------------------------
+THEMES = {
+    "Classic": {"pie_colors": ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f"]},
+    "Ocean": {"pie_colors": ["#003f5c", "#2f4b7c", "#665191", "#a05195", "#d45087"]},
+    "Sunset": {"pie_colors": ["#ff7c43", "#f95d6a", "#d45087", "#a05195", "#665191"]},
+    "Forest": {"pie_colors": ["#2e8b57", "#3cb371", "#66cdaa", "#20b2aa", "#2f4f4f"]},
 }
 
-# -----------------------
-# UI - Sidebar
-# -----------------------
-st.sidebar.title("Controls")
-mode = st.sidebar.radio("Mode", ["View Historical Data", "Upload New Data"])
+# ------------------------------------------------------------
+# HELPER FUNCTIONS
+# ------------------------------------------------------------
+def load_data(file):
+    """Load Excel data into a pandas DataFrame."""
+    return pd.read_excel(file)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Chart Theme")
-theme_choice = st.sidebar.selectbox("Choose a color theme", list(COLOR_THEMES.keys()))
-color_sequence = COLOR_THEMES.get(theme_choice, COLOR_THEMES["Default"])
+def save_to_csv(df, date_str):
+    """Save data to /data folder and push to GitHub."""
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    filename = f"{DATA_FOLDER}/{date_str}.csv"
+    df.to_csv(filename, index=False)
+    st.success(f"✅ Saved data to {filename}")
 
-st.sidebar.markdown("---")
-st.sidebar.info("Fridays are non-production days and will be ignored automatically.")
-
-# -----------------------
-# Historical dates available
-# -----------------------
-available_dates = read_saved_dates()
-
-# -----------------------
-# Mode: View Historical Data
-# -----------------------
-if mode == "View Historical Data":
-    st.sidebar.markdown("### Historical Data")
-    if not available_dates:
-        st.sidebar.warning("No historical files found. Switch to 'Upload New Data' to add the first file.")
-    else:
-        selected_date = st.sidebar.selectbox("Select date to view", available_dates, index=0)
-        df, path = load_data_for_date(selected_date)
-        if df is None:
-            st.error("Failed to load data for selected date.")
-        else:
-            st.success(f"Loaded historical data for {selected_date}")
-            # The app expects the three columns present; if a Date column exists, ensure it's date type
-            if "Date" in df.columns:
-                try:
-                    df["Date"] = pd.to_datetime(df["Date"]).dt.date
-                except:
-                    pass
-
-            # Filter out Friday rows (defensive)
-            try:
-                if "Date" in df.columns:
-                    df = df[df["Date"].apply(lambda d: pd.to_datetime(d).day_name() != "Friday")]
-            except Exception:
-                pass
-
-            # Drop any TOTAL row if present
-            df_display = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-
-            # Validate columns
-            if not all(col in df_display.columns for col in REQUIRED_COLS):
-                st.error(f"Historical file for {selected_date} is missing required columns: {REQUIRED_COLS}")
-            else:
-                # Show totals
-                total_daily = df_display["Production for the Day"].astype(float).sum()
-                total_acc = df_display["Accumulative Production"].astype(float).sum()
-
-                st.markdown(f"## 🔹 Totals for {selected_date}")
-                st.markdown(f"**Total Production for the Day:** {total_daily:,.2f} m³")
-                st.markdown(f"**Total Accumulative Production:** {total_acc:,.2f} m³")
-
-                # Show table
-                st.subheader("📋 Production Data Table")
-                st.dataframe(df_display.reset_index(drop=True), use_container_width=True)
-
-                # Charts
-                st.subheader("🌈 Production Charts")
-                try:
-                    pie = px.pie(df_display, names="Plant", values="Production for the Day",
-                                 title=f"Production Share — {selected_date}",
-                                 color_discrete_sequence=color_sequence)
-                    st.plotly_chart(pie, use_container_width=True)
-                except Exception as e:
-                    st.warning("Could not create pie chart: " + str(e))
-
-                try:
-                    bar = px.bar(df_display, x="Plant", y="Production for the Day", color="Plant",
-                                 title=f"Production per Plant — {selected_date}",
-                                 color_discrete_sequence=color_sequence, text_auto=True)
-                    st.plotly_chart(bar, use_container_width=True)
-                except Exception as e:
-                    st.warning("Could not create bar chart: " + str(e))
-
-                try:
-                    line = px.line(df_display, x="Plant", y="Production for the Day", markers=True,
-                                   title=f"Production Trend — {selected_date}", color_discrete_sequence=color_sequence)
-                    st.plotly_chart(line, use_container_width=True)
-                except Exception as e:
-                    st.warning("Could not create line chart: " + str(e))
-
-                try:
-                    area = px.area(df_display, x="Plant", y="Production for the Day", color="Plant",
-                                   title=f"Production Flow — {selected_date}", color_discrete_sequence=color_sequence)
-                    st.plotly_chart(area, use_container_width=True)
-                except Exception as e:
-                    st.warning("Could not create area chart: " + str(e))
-
-                # Accumulative chart
-                try:
-                    acc = px.bar(df_display, x="Plant", y="Accumulative Production", color="Plant",
-                                 title=f"Accumulative Production — {selected_date}", color_discrete_sequence=color_sequence)
-                    st.plotly_chart(acc, use_container_width=True)
-                except Exception as e:
-                    st.warning("Could not create accumulative chart: " + str(e))
-
-                # Top producer
-                try:
-                    top = df_display.loc[df_display["Production for the Day"].astype(float).idxmax()]
-                    st.success(f"🏆 Highest Producer for {selected_date}: **{top['Plant']}** ({float(top['Production for the Day']):,.2f} m³)")
-                except Exception:
-                    pass
-
-# -----------------------
-# Mode: Upload New Data
-# -----------------------
-elif mode == "Upload New Data":
-    st.header("Upload new daily production file")
-    st.markdown("Upload an Excel (.xlsx) containing the columns: `Plant`, `Production for the Day`, `Accumulative Production`.")
-    uploaded_file = st.file_uploader("Select Excel file to upload", type=["xlsx"], key="uploader")
-
-    selected_date = st.date_input("📅 On which date is this file for?", value=datetime.today())
-
-    if uploaded_file is not None:
+    if TOKEN:
         try:
-            # Read excel
-            df = pd.read_excel(uploaded_file)
+            subprocess.run(["git", "config", "--global", "user.email", "you@example.com"])
+            subprocess.run(["git", "config", "--global", "user.name", "Streamlit App"])
+            subprocess.run(["git", "add", filename])
+            subprocess.run(["git", "commit", "-m", f"Add data for {date_str}"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "push",
+                    f"https://{TOKEN}@github.com/{GITHUB_REPO}.git",
+                    "main",
+                ],
+                check=True,
+            )
+            st.success("🚀 Pushed to GitHub successfully!")
         except Exception as e:
-            st.error("Unable to read the Excel file. Make sure it is a valid .xlsx. Error: " + str(e))
-            st.stop()
+            st.warning(f"⚠️ Could not push to GitHub automatically.\n\nReason: {e}")
+    else:
+        st.info("ℹ️ GitHub token not found. File saved locally but not pushed.")
 
-        # Validate columns
-        if not all(col in df.columns for col in REQUIRED_COLS):
-            st.error(f"File must contain columns exactly: {REQUIRED_COLS}")
-            st.info("If your file is exported from another report, you can paste the data into this exact format in Excel and re-upload.")
-        else:
-            # Add/overwrite Date column with selected date (so user controls the date)
-            df["Date"] = pd.to_datetime(selected_date).strftime("%Y-%m-%d")
+def list_available_dates():
+    """List all available dates in /data folder."""
+    if not os.path.exists(DATA_FOLDER):
+        return []
+    return sorted([f.replace(".csv", "") for f in os.listdir(DATA_FOLDER) if f.endswith(".csv")])
 
-            # Exclude Fridays (if date is Friday, we treat as non-production day)
-            try:
-                if pd.to_datetime(df["Date"].iloc[0]).day_name() == "Friday":
-                    st.warning("Selected date is a Friday — Fridays are non-production days and will be ignored.")
-                    st.stop()
-            except Exception:
-                pass
+def plot_pie(df, theme):
+    """Generate pie charts for ACCU and FOR THE DAY with value labels."""
+    colors = THEMES[theme]["pie_colors"]
+    cols = st.columns(2)
+    try:
+        # Accumulative chart
+        with cols[0]:
+            st.subheader("Accumulated Production")
+            df_accu = df[["Machines", "ACCU"]]
+            fig, ax = plt.subplots()
+            wedges, texts, autotexts = ax.pie(
+                df_accu["ACCU"],
+                labels=df_accu["Machines"],
+                autopct="%1.1f%%",
+                colors=colors,
+                startangle=90,
+            )
+            for i, w in enumerate(wedges):
+                x, y = w.center
+                ang = (w.theta2 - w.theta1) / 2.0 + w.theta1
+                ax.text(
+                    x + 0.5 * w.r,
+                    y + 0.5 * w.r,
+                    f"{df_accu['ACCU'][i]}",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="black",
+                )
+            st.pyplot(fig)
 
-            # Remove TOTAL row if present
-            df = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        # Daily production chart
+        with cols[1]:
+            st.subheader("Production for the Day")
+            df_day = df[["Machines", "FOR THE DAY"]]
+            fig, ax = plt.subplots()
+            wedges, texts, autotexts = ax.pie(
+                df_day["FOR THE DAY"],
+                labels=df_day["Machines"],
+                autopct="%1.1f%%",
+                colors=colors,
+                startangle=90,
+            )
+            for i, w in enumerate(wedges):
+                x, y = w.center
+                ang = (w.theta2 - w.theta1) / 2.0 + w.theta1
+                ax.text(
+                    x + 0.5 * w.r,
+                    y + 0.5 * w.r,
+                    f"{df_day['FOR THE DAY'][i]}",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="black",
+                )
+            st.pyplot(fig)
+    except Exception as e:
+        st.error(f"Error creating charts: {e}")
 
-            # Convert numeric columns to float (defensive)
-            df["Production for the Day"] = pd.to_numeric(df["Production for the Day"], errors="coerce").fillna(0.0)
-            df["Accumulative Production"] = pd.to_numeric(df["Accumulative Production"], errors="coerce").fillna(0.0)
+def delete_or_rename_option():
+    """Allow renaming or deleting data files."""
+    st.subheader("🧹 Manage Uploaded Data")
+    available = list_available_dates()
+    if not available:
+        st.info("No files to manage yet.")
+        return
+    choice = st.selectbox("Select a file to manage:", available)
+    action = st.radio("Choose an action:", ["Rename", "Delete"])
+    if action == "Rename":
+        new_date = st.date_input("Select new date for this file")
+        if st.button("✅ Confirm Rename"):
+            os.rename(f"{DATA_FOLDER}/{choice}.csv", f"{DATA_FOLDER}/{new_date}.csv")
+            st.success(f"Renamed {choice} → {new_date}")
+    elif action == "Delete":
+        if st.button("🗑️ Confirm Delete"):
+            os.remove(f"{DATA_FOLDER}/{choice}.csv")
+            st.success(f"Deleted {choice}.csv")
 
-            # Save CSV for history
-            save_path = save_upload_df(df, selected_date)
-            st.success(f"Saved data to {save_path}")
+# ------------------------------------------------------------
+# MAIN APP
+# ------------------------------------------------------------
+st.title("🏭 Production Dashboard")
 
-            # Attempt to push to GitHub
-            push_ok, push_msg = attempt_push_to_github(save_path, commit_message=f"Add production data for {selected_date.strftime('%Y-%m-%d')}")
-            if push_ok:
-                st.success("✅ Successfully pushed saved file to GitHub.")
-            else:
-                st.warning("Could not push to GitHub automatically.")
-                st.info("Reason / hint: " + str(push_msg))
-                st.write("If you want automatic Git pushes from Streamlit Cloud, the environment must be configured with git credentials or a token. Otherwise you can manually upload the CSV into the `data/` folder in your repository (instructions below).")
+# 1️⃣ Date input before upload
+selected_date = st.date_input("📅 On which date is this file for?")
+date_str = selected_date.strftime("%Y-%m-%d")
 
-            # Display uploaded day immediately
-            df_display = df.copy()
-            # Display totals and charts below (same as historical view)
-            total_daily = df_display["Production for the Day"].sum()
-            total_acc = df_display["Accumulative Production"].sum()
+uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
 
-            st.markdown(f"## 🔹 Totals for {selected_date.strftime('%Y-%m-%d')}")
-            st.markdown(f"**Total Production for the Day:** {total_daily:,.2f} m³")
-            st.markdown(f"**Total Accumulative Production:** {total_acc:,.2f} m³")
+# Theme selector
+selected_theme = st.selectbox("🎨 Choose Chart Theme", list(THEMES.keys()))
 
-            st.subheader("📋 Production Data Table (Uploaded)")
-            st.dataframe(df_display, use_container_width=True)
+# Confirmation dialog before saving
+if uploaded_file:
+    st.subheader("Preview of Uploaded Data:")
+    df = load_data(uploaded_file)
+    st.dataframe(df)
 
-            st.subheader("🌈 Production Charts (Uploaded)")
-            try:
-                pie = px.pie(df_display, names="Plant", values="Production for the Day",
-                             title=f"Production Share — {selected_date.strftime('%Y-%m-%d')}",
-                             color_discrete_sequence=color_sequence)
-                st.plotly_chart(pie, use_container_width=True)
-            except Exception as e:
-                st.warning("Could not create pie chart: " + str(e))
+    if st.checkbox("✅ Confirm this data is correct and ready to upload"):
+        if st.button("🚀 Upload to Dashboard"):
+            save_to_csv(df, date_str)
 
-            try:
-                bar = px.bar(df_display, x="Plant", y="Production for the Day", color="Plant",
-                             title=f"Production per Plant — {selected_date.strftime('%Y-%m-%d')}",
-                             color_discrete_sequence=color_sequence, text_auto=True)
-                st.plotly_chart(bar, use_container_width=True)
-            except Exception as e:
-                st.warning("Could not create bar chart: " + str(e))
+# 3️⃣ Historical data viewer
+st.divider()
+st.header("📆 Historical Data Viewer")
 
-            try:
-                line = px.line(df_display, x="Plant", y="Production for the Day", markers=True,
-                               title=f"Production Trend — {selected_date.strftime('%Y-%m-%d')}", color_discrete_sequence=color_sequence)
-                st.plotly_chart(line, use_container_width=True)
-            except Exception as e:
-                st.warning("Could not create line chart: " + str(e))
+available_dates = list_available_dates()
+if available_dates:
+    view_date = st.selectbox("Select a date to view data:", available_dates)
+    if view_date:
+        df_old = pd.read_csv(f"{DATA_FOLDER}/{view_date}.csv")
+        st.write(f"### Data for {view_date}")
+        st.dataframe(df_old)
+        plot_pie(df_old, selected_theme)
+else:
+    st.info("No historical data found yet.")
 
-            try:
-                area = px.area(df_display, x="Plant", y="Production for the Day", color="Plant",
-                               title=f"Production Flow — {selected_date.strftime('%Y-%m-%d')}", color_discrete_sequence=color_sequence)
-                st.plotly_chart(area, use_container_width=True)
-            except Exception as e:
-                st.warning("Could not create area chart: " + str(e))
-
-            # Accumulative chart
-            try:
-                acc = px.bar(df_display, x="Plant", y="Accumulative Production", color="Plant",
-                             title=f"Accumulative Production — {selected_date.strftime('%Y-%m-%d')}", color_discrete_sequence=color_sequence)
-                st.plotly_chart(acc, use_container_width=True)
-            except Exception as e:
-                st.warning("Could not create accumulative chart: " + str(e))
-
-            # Top producer
-            try:
-                top = df_display.loc[df_display["Production for the Day"].astype(float).idxmax()]
-                st.success(f"🏆 Highest Producer: **{top['Plant']}** ({float(top['Production for the Day']):,.2f} m³)")
-            except Exception:
-                pass
-
-            # Helpful manual instructions if auto-push failed
-            if not push_ok:
-                st.markdown("---")
-                st.info("Manual backup step (if auto-push failed):")
-                st.write("1. Download the saved CSV file from the app container (or copy it locally).")
-                st.write("2. In GitHub, open your repository and upload the CSV to the `data/` folder.")
-                st.write("3. Commit changes — the file will then be available in the historical dropdown.")
-
-# -----------------------
-# Footer / Help
-# -----------------------
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Help / Notes**")
-st.sidebar.write("- Upload Excel files containing columns: Plant, Production for the Day, Accumulative Production.")
-st.sidebar.write("- Use the date picker so the app tags the upload to the correct day.")
-st.sidebar.write("- Friday is an off day and such uploads will be ignored.")
-st.sidebar.write("- The app will save files to the `data/` folder. If automatic Git push is not available, upload CSVs manually to the repo.")
+# 4️⃣ File management section
+st.divider()
+delete_or_rename_option()
