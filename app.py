@@ -1,6 +1,6 @@
-# app.py - Advanced Production Dashboard with AI & IoT Features
+# app.py - Advanced Production Dashboard with All AI Features
 """
-Production Dashboard - Ultimate version with advanced capabilities
+Production Dashboard - Ultimate version with all advanced capabilities
 Features:
 - Upload daily Excel file (choose date)
 - Confirmation before saving/uploading
@@ -41,11 +41,16 @@ import numpy as np
 import json
 import base64
 from io import BytesIO
+import time
 
 # -------------------------------
 # Configuration
 # -------------------------------
-st.set_page_config(page_title="Concrete Production Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Concrete Production Dashboard", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
 # Repo and data folder
 GITHUB_REPO = os.getenv("GITHUB_REPO", "Ashwin-KBRC/production_dashboard")
@@ -610,8 +615,78 @@ st.markdown("### *AI-Powered Operational Intelligence Platform*")
 if not ML_AVAILABLE and enable_ai:
     st.warning("⚠️ Machine learning features are disabled. Some AI capabilities may not work properly.")
 
+def process_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Process dataframe for display and analysis."""
+    df_display = df.copy()
+    # Remove TOTAL rows if present
+    if 'Plant' in df_display.columns:
+        df_display = df_display[~df_display["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+    
+    # Convert numeric columns
+    if 'Production for the Day' in df_display.columns:
+        df_display["Production for the Day"] = pd.to_numeric(df_display["Production for the Day"], errors="coerce").fillna(0.0)
+    if 'Accumulative Production' in df_display.columns:
+        df_display["Accumulative Production"] = pd.to_numeric(df_display["Accumulative Production"], errors="coerce").fillna(0.0)
+    
+    return df_display
+
+def display_comprehensive_analysis(df: pd.DataFrame, date_str: str):
+    """Display comprehensive analysis for the given dataframe."""
+    # KPIs
+    kpis = calculate_advanced_kpis(df)
+    
+    # Enhanced KPI Dashboard
+    st.subheader("📊 Advanced Performance Dashboard")
+    
+    # Gauge charts
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.plotly_chart(create_gauge_chart(kpis['utilization_rate'], "Utilization Rate"), use_container_width=True)
+    with col2:
+        st.plotly_chart(create_gauge_chart(kpis['balance_score'], "Balance Score"), use_container_width=True)
+    with col3:
+        st.plotly_chart(create_gauge_chart(kpis['efficiency_ratio'], "Efficiency Ratio"), use_container_width=True)
+    
+    # Performance grade and radar
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Overall Performance Grade", kpis['overall_grade'])
+        st.plotly_chart(create_performance_radar(kpis), use_container_width=True)
+    
+    with col2:
+        st.subheader("🏆 Performance Tiers")
+        for tier, plants in kpis['performance_tiers'].items():
+            st.write(f"**{tier}:** {', '.join(plants) if plants else 'None'}")
+    
+    # AI Recommendations
+    if enable_ai:
+        st.subheader("💡 AI-Powered Recommendations")
+        recommendations = generate_ai_recommendations(df, kpis)
+        
+        for rec in recommendations:
+            with st.expander(f"{rec['priority']} Priority - {rec['category']}"):
+                st.write(rec['message'])
+                st.info(f"**Recommended Action:** {rec['action']}")
+    
+    # Forecasting
+    if enable_forecasting and ML_AVAILABLE:
+        st.subheader("🔮 Production Forecasting")
+        selected_plant = st.selectbox("Select plant for forecast:", df['Plant'].unique())
+        
+        if selected_plant:
+            forecasts = advanced_forecasting(df, selected_plant, days=5)
+            
+            if "error" not in forecasts:
+                forecast_df = pd.DataFrame({
+                    'Day': [f'Day {i+1}' for i in range(5)],
+                    **forecasts
+                })
+                
+                st.line_chart(forecast_df.set_index('Day'))
+            else:
+                st.info("Need more historical data for accurate forecasting")
+
 if mode == "Upload New Data":
-    # ... (keep existing upload functionality, but enhanced with new features)
     st.header("📤 Upload New Production Data")
     st.markdown("Upload an Excel (.xlsx) containing production data.")
     
@@ -627,6 +702,7 @@ if mode == "Upload New Data":
         valid, msg = validate_dataframe(df_uploaded)
         if not valid:
             st.error(msg)
+            st.info("Make sure the Excel has exact headers and no merged cells.")
         else:
             # Enhanced preview with statistics
             st.subheader("📋 Data Preview & Validation")
@@ -642,13 +718,15 @@ if mode == "Upload New Data":
                 weekday_name = pd.to_datetime(df_save["Date"].iloc[0]).day_name()
                 
                 if weekday_name == "Friday":
-                    st.error("Fridays are non-production days.")
+                    st.error("❌ Fridays are non-production days - data not saved")
                 else:
                     pushed, message = save_csv_and_attempt_push(df_save, selected_date)
                     
-                    if pushed:
+                    if "saved" in message.lower():
                         st.balloons()
                         st.success("✅ Data uploaded successfully!")
+                        if pushed:
+                            st.success("🚀 Data pushed to GitHub")
                     
                     # Enhanced analysis section
                     df_display = process_dataframe(df_save)
@@ -659,7 +737,7 @@ elif mode == "View Historical Data":
     saved = list_saved_dates()
     
     if not saved:
-        st.info("No historical data found.")
+        st.info("📭 No historical data found. Upload a file first.")
     else:
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -696,7 +774,7 @@ elif mode == "Trend Analysis":
     saved = list_saved_dates()
     
     if len(saved) < 2:
-        st.info("Need at least 2 dates for trend analysis.")
+        st.info("📊 Need at least 2 dates for trend analysis.")
     else:
         selected_dates = st.multiselect("Select dates for analysis:", saved, default=saved[:7])
         
@@ -722,11 +800,14 @@ elif mode == "Trend Analysis":
                 with col1:
                     st.metric("Average Daily Production", f"{trend_df['Total Daily Production'].mean():,.0f} m³")
                 with col2:
-                    st.metric("Growth Rate", f"{trend_df['Total Daily Production'].pct_change().mean()*100:+.1f}%")
+                    growth_rate = trend_df['Total Daily Production'].pct_change().mean() * 100
+                    st.metric("Growth Rate", f"{growth_rate:+.1f}%")
                 with col3:
-                    st.metric("Best Day", trend_df.loc[trend_df['Total Daily Production'].idxmax(), 'Date'])
+                    best_day = trend_df.loc[trend_df['Total Daily Production'].idxmax(), 'Date']
+                    st.metric("Best Day", best_day)
                 with col4:
-                    st.metric("Consistency", f"{trend_df['Total Daily Production'].std()/trend_df['Total Daily Production'].mean()*100:.1f}%")
+                    consistency = (trend_df['Total Daily Production'].std() / trend_df['Total Daily Production'].mean()) * 100
+                    st.metric("Consistency", f"{consistency:.1f}%")
 
 elif mode == "Real-time Monitor":
     st.header("🔄 Real-time Production Monitor")
@@ -806,7 +887,7 @@ elif mode == "Automated Reports":
             
             # Download option
             st.download_button(
-                label="📥 Download Report as PDF",
+                label="📥 Download Report as Markdown",
                 data=report_text,
                 file_name=f"production_report_{report_date}.md",
                 mime="text/markdown"
@@ -817,74 +898,49 @@ elif mode == "Automated Reports":
 
 elif mode == "Manage Data":
     st.header("🗃️ Data Management")
-    # ... (keep existing management functionality)
-
-# -------------------------------
-# Helper functions for enhanced UI
-# -------------------------------
-def process_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Process dataframe for display and analysis."""
-    df_display = df.copy()
-    df_display = df_display[~df_display["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-    df_display["Production for the Day"] = pd.to_numeric(df_display["Production for the Day"], errors="coerce").fillna(0.0)
-    df_display["Accumulative Production"] = pd.to_numeric(df_display["Accumulative Production"], errors="coerce").fillna(0.0)
-    return df_display
-
-def display_comprehensive_analysis(df: pd.DataFrame, date_str: str):
-    """Display comprehensive analysis for the given dataframe."""
-    # KPIs
-    kpis = calculate_advanced_kpis(df)
     
-    # Enhanced KPI Dashboard
-    st.subheader("📊 Advanced Performance Dashboard")
-    
-    # Gauge charts
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.plotly_chart(create_gauge_chart(kpis['utilization_rate'], "Utilization Rate"), use_container_width=True)
-    with col2:
-        st.plotly_chart(create_gauge_chart(kpis['balance_score'], "Balance Score"), use_container_width=True)
-    with col3:
-        st.plotly_chart(create_gauge_chart(kpis['efficiency_ratio'], "Efficiency Ratio"), use_container_width=True)
-    
-    # Performance grade and radar
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Overall Performance Grade", kpis['overall_grade'])
-        st.plotly_chart(create_performance_radar(kpis), use_container_width=True)
-    
-    with col2:
-        st.subheader("🏆 Performance Tiers")
-        for tier, plants in kpis['performance_tiers'].items():
-            st.write(f"**{tier}:** {', '.join(plants) if plants else 'None'}")
-    
-    # AI Recommendations
-    if enable_ai:
-        st.subheader("💡 AI-Powered Recommendations")
-        recommendations = generate_ai_recommendations(df, kpis)
+    saved_dates = list_saved_dates()
+    if not saved_dates:
+        st.info("📭 No data files to manage.")
+    else:
+        selected_date = st.selectbox("Select file to manage:", saved_dates)
         
-        for rec in recommendations:
-            with st.expander(f"{rec['priority']} Priority - {rec['category']}"):
-                st.write(rec['message'])
-                st.info(f"**Recommended Action:** {rec['action']}")
-    
-    # Forecasting
-    if enable_forecasting and ML_AVAILABLE:
-        st.subheader("🔮 Production Forecasting")
-        selected_plant = st.selectbox("Select plant for forecast:", df['Plant'].unique())
+        st.write(f"Managing file: **{selected_date}.csv**")
         
-        if selected_plant:
-            forecasts = advanced_forecasting(df, selected_plant, days=5)
-            
-            if "error" not in forecasts:
-                forecast_df = pd.DataFrame({
-                    'Day': [f'Day {i+1}' for i in range(5)],
-                    **forecasts
-                })
+        action = st.radio("Choose action:", ["View Info", "Rename", "Delete"])
+        
+        if action == "View Info":
+            try:
+                df = load_saved_csv(selected_date)
+                st.write(f"**File Info:**")
+                st.write(f"- Rows: {len(df)}")
+                st.write(f"- Plants: {len(df['Plant'].unique())}")
+                st.write(f"- Total Production: {df['Production for the Day'].sum():,.0f} m³")
+                st.dataframe(df.head())
+            except Exception as e:
+                st.error(f"Error loading file: {e}")
                 
-                st.line_chart(forecast_df.set_index('Day'))
-            else:
-                st.info("Need more historical data for accurate forecasting")
+        elif action == "Rename":
+            new_date = st.date_input("New date for this file:")
+            new_date_str = new_date.strftime("%Y-%m-%d")
+            
+            if st.button("Rename File"):
+                if rename_saved_csv(selected_date, new_date_str):
+                    st.success(f"✅ Renamed {selected_date} to {new_date_str}")
+                    st.rerun()
+                else:
+                    st.error("❌ Rename failed")
+                    
+        elif action == "Delete":
+            st.warning("⚠️ This action cannot be undone!")
+            confirm = st.checkbox("I understand this will permanently delete the file")
+            
+            if st.button("Delete File", disabled=not confirm):
+                if delete_saved_csv(selected_date):
+                    st.success(f"✅ Deleted {selected_date}")
+                    st.rerun()
+                else:
+                    st.error("❌ Delete failed")
 
 # Footer
 st.markdown("---")
@@ -913,6 +969,9 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: bold;
+    }
+    .stButton button {
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
