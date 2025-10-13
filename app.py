@@ -1,6 +1,6 @@
 # app.py
 """
-Production Dashboard - Final version with PDF export & weekly/monthly analysis
+Production Dashboard - Final version
 Features:
 - Upload daily Excel file (choose date)
 - Confirmation before saving/uploading
@@ -11,7 +11,7 @@ Features:
 - 4 chart themes
 - Value labels on charts and top-producer highlight
 - Ignores Fridays
-- Export charts + summary as PDF
+- Export charts and tables to PDF
 - Weekly and monthly analysis
 """
 
@@ -20,12 +20,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
 from fpdf import FPDF
 import tempfile
-import plotly.io as pio
 
 # -------------------------------
 # Configuration
@@ -161,12 +160,15 @@ def rename_saved_csv(old_date: str, new_date: str) -> bool:
 # Plotting helpers (plotly)
 # -------------------------------
 def plot_production_pie(df: pd.DataFrame, theme_colors: list, title: str, value_col: str):
+    """Return a plotly pie figure with labels and hover that includes value labels in the hover."""
     fig = px.pie(df, names="Plant", values=value_col, title=title, color_discrete_sequence=theme_colors)
+    # show percentage + value in hover
     fig.update_traces(textinfo="percent+label", hovertemplate="%{label}: %{value} (%{percent})<extra></extra>")
     return fig
 
 
 def plot_production_bar(df: pd.DataFrame, theme_colors: list, title: str, value_col: str):
+    """Return a plotly bar figure with values displayed on top of bars."""
     fig = px.bar(df, x="Plant", y=value_col, title=title, color="Plant", color_discrete_sequence=theme_colors, text=value_col)
     fig.update_traces(textposition="outside")
     fig.update_layout(uniformtext_minsize=8, uniformtext_mode="hide", xaxis_title=None, yaxis_title="m³")
@@ -184,64 +186,59 @@ def plot_production_area(df: pd.DataFrame, theme_colors: list, title: str, value
 
 
 # -------------------------------
-# PDF export function
+# PDF Export function
 # -------------------------------
-def export_charts_to_pdf(df: pd.DataFrame, date_str: str, theme_colors: list):
-    pdf = FPDF()
+def export_charts_to_pdf(df: pd.DataFrame, date_label: str, theme_colors: list):
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, f"Production Report — {date_str}", ln=True, align="C")
-    pdf.ln(10)
+    pdf.cell(0, 10, f"Production Report — {date_label}", ln=True, align="C")
+    pdf.ln(5)
 
-    # Totals
-    total_daily = df["Production for the Day"].sum()
-    total_acc = df["Accumulative Production"].sum()
+    # Table
     pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 8, f"Total Production for the Day: {total_daily:,.2f} m³", ln=True)
-    pdf.cell(0, 8, f"Total Accumulative Production: {total_acc:,.2f} m³", ln=True)
-    pdf.ln(10)
-
-    # Top producer
-    top = df.loc[df["Production for the Day"].astype(float).idxmax()]
-    pdf.cell(0, 8, f"Highest Producer: {top['Plant']} ({float(top['Production for the Day']):,.2f} m³)", ln=True)
-    pdf.ln(10)
+    col_width = 60
+    row_height = 8
+    for i, col in enumerate(df.columns):
+        pdf.cell(col_width, row_height, str(col), border=1)
+    pdf.ln(row_height)
+    for index, row in df.iterrows():
+        for col in df.columns:
+            pdf.cell(col_width, row_height, str(row[col]), border=1)
+        pdf.ln(row_height)
+    pdf.ln(5)
 
     # Charts
-    chart_funcs = [
+    chart_types = [
         ("Pie Chart", plot_production_pie),
         ("Bar Chart", plot_production_bar),
         ("Line Chart", plot_production_line),
         ("Area Chart", plot_production_area),
-        ("Accumulative Bar", lambda d, c, t, v: plot_production_bar(d, c, t, "Accumulative Production"))
+        ("Accumulative Bar", plot_production_bar),
     ]
+    for title, func in chart_types:
+        fig = func(df, theme_colors, title, "Production for the Day" if "Accumulative" not in title else "Accumulative Production")
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                fig.write_image(tmpfile.name)
+                pdf.image(tmpfile.name, w=180)
+        except Exception as e:
+            st.error(f"PDF chart generation failed: {e}")
 
-    for title, func in chart_funcs:
-        fig = func(df, theme_colors, title, "Production for the Day")
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-            fig.write_image(tmpfile.name)
-            pdf.image(tmpfile.name, w=180)
-            pdf.ln(10)
+        pdf.ln(5)
 
-    pdf_output = f"{date_str}_production_report.pdf"
-    pdf.output(pdf_output)
-    return pdf_output
-
-
-# -------------------------------
-# Weekly/Monthly aggregation
-# -------------------------------
-def aggregate_production(df_all: pd.DataFrame, period: str = "W"):
-    df_all['Date'] = pd.to_datetime(df_all['Date'])
-    df_grouped = df_all.groupby([pd.Grouper(key='Date', freq=period), 'Plant']).sum().reset_index()
-    return df_grouped
+    # Save PDF to temp file and return path
+    pdf_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(pdf_file.name)
+    return pdf_file.name
 
 
 # -------------------------------
 # UI - Sidebar controls
 # -------------------------------
 st.sidebar.title("Controls")
-mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Weekly/Monthly Analysis"])
+mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Weekly Analysis", "Monthly Analysis"])
 
 st.sidebar.markdown("---")
 theme_choice = st.sidebar.selectbox("Chart Theme", list(COLOR_THEMES.keys()), index=0)
@@ -259,6 +256,7 @@ st.sidebar.write("- Fridays are non-production days and will be ignored.")
 # -------------------------------
 st.title("🧱 PRODUCTION DASHBOARD — Web Dashboard")
 
+# Upload Mode
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
     st.markdown("Upload an Excel (.xlsx) containing the columns: `Plant`, `Production for the Day`, `Accumulative Production`.")
@@ -278,14 +276,13 @@ if mode == "Upload New Data":
         else:
             st.subheader("Preview of uploaded data (first rows)")
             st.dataframe(df_uploaded.head(20))
-
             confirm = st.checkbox("I confirm this data is correct and ready to upload")
             if confirm:
                 if st.button("Upload and Save to History"):
                     df_save = ensure_date_column(df_uploaded, selected_date)
                     weekday_name = pd.to_datetime(df_save["Date"].iloc[0]).day_name()
                     if weekday_name == "Friday":
-                        st.error("Selected date is a Friday — Fridays are non-production days and will be ignored. Change the date or cancel.")
+                        st.error("Selected date is a Friday — Fridays are non-production days and will be ignored.")
                     else:
                         pushed, message = save_csv_and_attempt_push(df_save, selected_date)
                         st.success(f"✅ Saved data to {DATA_DIR}/{selected_date.strftime('%Y-%m-%d')}.csv")
@@ -309,6 +306,7 @@ if mode == "Upload New Data":
                         st.subheader("📋 Uploaded Production Table")
                         st.dataframe(df_display, use_container_width=True)
 
+                        # Charts
                         st.subheader("🌈 Production Charts (Uploaded)")
                         col1, col2 = st.columns(2)
                         with col1:
@@ -323,165 +321,31 @@ if mode == "Upload New Data":
                                 st.plotly_chart(fig_bar, use_container_width=True)
                             except Exception as e:
                                 st.error(f"Could not create bar chart: {e}")
-
                         try:
                             fig_line = plot_production_line(df_display, theme_colors, "Production Trend (Line)", "Production for the Day")
                             st.plotly_chart(fig_line, use_container_width=True)
                         except Exception as e:
                             st.error(f"Could not create line chart: {e}")
-
                         try:
                             fig_area = plot_production_area(df_display, theme_colors, "Production Flow (Area)", "Production for the Day")
                             st.plotly_chart(fig_area, use_container_width=True)
                         except Exception as e:
                             st.error(f"Could not create area chart: {e}")
-
                         try:
                             fig_acc = plot_production_bar(df_display, theme_colors, "Accumulative Production per Plant", "Accumulative Production")
                             st.plotly_chart(fig_acc, use_container_width=True)
                         except Exception as e:
                             st.error(f"Could not create accumulative chart: {e}")
 
+                        # Top producer
                         try:
                             top = df_display.loc[df_display["Production for the Day"].astype(float).idxmax()]
                             st.success(f"🏆 Highest Producer: **{top['Plant']}** with {float(top['Production for the Day']):,.2f} m³")
                         except Exception:
                             pass
 
-                        # PDF export
-                        if st.button("📄 Export Report as PDF"):
-                            pdf_file = export_charts_to_pdf(df_display, selected_date.strftime("%Y-%m-%d"), theme_colors)
+                        # PDF Export button
+                        if st.button("📄 Export Uploaded Data & Charts to PDF"):
+                            pdf_file = export_charts_to_pdf(df_display, selected_date.strftime('%Y-%m-%d'), theme_colors)
                             with open(pdf_file, "rb") as f:
-                                st.download_button("Download PDF", f, file_name=pdf_file)
-
-
-elif mode == "View Historical Data":
-    st.header("Historical Data Viewer")
-    saved = list_saved_dates()
-    if not saved:
-        st.info("No historical data found yet. Upload a file first.")
-    else:
-        chosen = st.selectbox("Select a date to view:", saved, index=0)
-        try:
-            df_hist = load_saved_csv(chosen)
-        except Exception as e:
-            st.error(f"Unable to load saved file: {e}")
-            df_hist = None
-
-        if df_hist is not None:
-            if "Date" in df_hist.columns:
-                try:
-                    df_hist["Date"] = pd.to_datetime(df_hist["Date"]).dt.strftime("%Y-%m-%d")
-                except Exception:
-                    pass
-
-            df_hist_display = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-            df_hist_display["Production for the Day"] = pd.to_numeric(df_hist_display["Production for the Day"], errors="coerce").fillna(0.0)
-            df_hist_display["Accumulative Production"] = pd.to_numeric(df_hist_display["Accumulative Production"], errors="coerce").fillna(0.0)
-
-            st.subheader(f"Data for {chosen}")
-            st.dataframe(df_hist_display, use_container_width=True)
-
-            total_daily = df_hist_display["Production for the Day"].sum()
-            total_acc = df_hist_display["Accumulative Production"].sum()
-            st.markdown("#### 🔹 Totals")
-            st.write(f"**Total Production for the Day:** {total_daily:,.2f} m³")
-            st.write(f"**Total Accumulative Production:** {total_acc:,.2f} m³")
-
-            st.subheader("🌈 Production Charts (Historical)")
-            try:
-                fig_pie = plot_production_pie(df_hist_display, theme_colors, f"Plant-wise Production — {chosen}", "Production for the Day")
-                st.plotly_chart(fig_pie, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error creating pie chart: {e}")
-
-            try:
-                fig_bar = plot_production_bar(df_hist_display, theme_colors, f"Production per Plant — {chosen}", "Production for the Day")
-                st.plotly_chart(fig_bar, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error creating bar chart: {e}")
-
-            try:
-                fig_line = plot_production_line(df_hist_display, theme_colors, f"Production Trend — {chosen}", "Production for the Day")
-                st.plotly_chart(fig_line, use_container_width=True)
-            except Exception as e:
-                st.warning(f"Line chart error: {e}")
-
-            try:
-                fig_area = plot_production_area(df_hist_display, theme_colors, f"Production Flow — {chosen}", "Production for the Day")
-                st.plotly_chart(fig_area, use_container_width=True)
-            except Exception as e:
-                st.warning(f"Area chart error: {e}")
-
-            try:
-                fig_acc = plot_production_bar(df_hist_display, theme_colors, f"Accumulative Production — {chosen}", "Accumulative Production")
-                st.plotly_chart(fig_acc, use_container_width=True)
-            except Exception as e:
-                st.error(f"Accumulative chart error: {e}")
-
-            try:
-                top = df_hist_display.loc[df_hist_display["Production for the Day"].astype(float).idxmax()]
-                st.success(f"🏆 Highest Producer for {chosen}: **{top['Plant']}** ({float(top['Production for the Day']):,.2f} m³)")
-            except Exception:
-                pass
-
-            # PDF export
-            if st.button("📄 Export Historical Report as PDF"):
-                pdf_file = export_charts_to_pdf(df_hist_display, chosen, theme_colors)
-                with open(pdf_file, "rb") as f:
-                    st.download_button("Download PDF", f, file_name=pdf_file)
-
-
-elif mode == "Manage Data":
-    st.header("Data Management (Rename / Delete)")
-    saved = list_saved_dates()
-    if not saved:
-        st.info("No saved files found.")
-    else:
-        chosen = st.selectbox("Select a saved date", saved)
-        st.write("⚠️ Please be careful. These actions are permanent.")
-        action = st.radio("Action", ["Rename", "Delete"])
-        if action == "Rename":
-            new_date_obj = st.date_input("Choose new date for this file")
-            new_date_str = new_date_obj.strftime("%Y-%m-%d")
-            if st.button("Confirm Rename"):
-                if rename_saved_csv(chosen, new_date_str):
-                    st.success(f"Renamed {chosen} → {new_date_str}")
-                else:
-                    st.error("Rename failed (file may not exist).")
-        elif action == "Delete":
-            if st.button("Confirm Delete"):
-                if delete_saved_csv(chosen):
-                    st.success(f"Deleted {chosen}")
-                else:
-                    st.error("Delete failed (file may not exist).")
-
-
-elif mode == "Weekly/Monthly Analysis":
-    st.header("📊 Weekly & Monthly Analysis")
-    analysis_type = st.selectbox("Select Analysis Type", ["Weekly", "Monthly"])
-    period = "W" if analysis_type == "Weekly" else "M"
-
-    all_dates = list_saved_dates()
-    if all_dates:
-        df_list = [load_saved_csv(d) for d in all_dates]
-        df_all = pd.concat(df_list, ignore_index=True)
-        df_agg = aggregate_production(df_all, period=period)
-
-        st.subheader(f"{analysis_type} Production Totals")
-        st.dataframe(df_agg, use_container_width=True)
-
-        for plant in df_agg['Plant'].unique():
-            df_plant = df_agg[df_agg['Plant'] == plant]
-            fig = px.line(df_plant, x='Date', y='Production for the Day', title=f"{plant} Production Over Time", markers=True)
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No historical data available for analysis.")
-
-
-# Footer help
-st.sidebar.markdown("---")
-st.sidebar.write("If auto-push to GitHub fails, make sure:")
-st.sidebar.write("1) You added the token to Streamlit Secrets as TOML: `GITHUB_TOKEN = \"ghp_xxx\"`")
-st.sidebar.write(f"2) You set repo name as TOML: `GITHUB_REPO = \"{GITHUB_REPO}\" (or set GITHUB_REPO env var).")
-st.sidebar.write("3) The app must have network/git access to push changes. Manual upload to repo/data is always an option.")
+                                st.download_button("Download PDF", f, file_name=f"Production_{selected_date.strftime('%Y-%m-%d')}.pdf", mime="application/pdf")
