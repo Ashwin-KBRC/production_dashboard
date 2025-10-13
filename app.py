@@ -26,9 +26,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
 
 # -------------------------------
 # Configuration
@@ -54,6 +51,17 @@ COLOR_THEMES = {
 # Make sure data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# -------------------------------
+# Import ML libraries with error handling
+# -------------------------------
+try:
+    from sklearn.ensemble import IsolationForest
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import StandardScaler
+    ML_AVAILABLE = True
+except ImportError as e:
+    st.warning(f"Machine learning libraries not available: {e}")
+    ML_AVAILABLE = False
 
 # -------------------------------
 # AI-Powered Helper Functions
@@ -61,6 +69,11 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def detect_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     """Detect anomalous production values using machine learning."""
+    if not ML_AVAILABLE:
+        df_result = df.copy()
+        df_result["Anomaly_Type"] = "✅ Normal (ML disabled)"
+        return df_result
+        
     try:
         # Prepare features
         features = df[["Production for the Day", "Accumulative Production"]].copy()
@@ -90,6 +103,9 @@ def detect_anomalies(df: pd.DataFrame) -> pd.DataFrame:
 
 def forecast_next_day(df_historical: pd.DataFrame, plant: str) -> float:
     """Simple linear regression to forecast next day's production."""
+    if not ML_AVAILABLE:
+        return None
+        
     try:
         # Get historical data for specific plant
         plant_data = df_historical[df_historical["Plant"] == plant].copy()
@@ -314,6 +330,10 @@ st.sidebar.write("- Fridays are non-production days and will be ignored.")
 # Main app body
 # -------------------------------
 st.title("🧱 PRODUCTION FOR THE DAY — AI-Enhanced Dashboard")
+
+# Show ML availability status
+if not ML_AVAILABLE:
+    st.warning("⚠️ Machine learning features are disabled. Some AI capabilities may not work properly.")
 
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
