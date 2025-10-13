@@ -5,10 +5,6 @@ plotly
 fpdf
 streamlit-authenticator
 openpyxl
-streamlit
-pandas
-plotly
-openpyxl
 matplotlib
 seaborn
 GitPython
