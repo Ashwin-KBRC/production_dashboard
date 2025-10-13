@@ -85,36 +85,42 @@ def save_csv_and_attempt_push(df: pd.DataFrame, date_obj: datetime.date) -> Tupl
     file_path = DATA_DIR / f"{date_str}.csv"
     df.to_csv(file_path, index=False)
 
-    # Try to commit & push
-    if not TOKEN:
-        return False, "GITHUB_TOKEN not configured in environment (Streamlit Secrets). File saved locally."
+    if not TOKEN or not GITHUB_REPO:
+        return False, "GITHUB_TOKEN or GITHUB_REPO not configured in environment (Streamlit Secrets). File saved locally."
 
-    # Use the token in the remote URL for push
-    remote_url = f"https://{TOKEN}@github.com/{GITHUB_REPO}.git"
+    # Construct remote URL with token
+    remote_url = GITHUB_REPO.replace("https://", f"https://{TOKEN}@")
 
     try:
-        # Configure git user (local config in container)
-        subprocess.run(["git", "config", "--global", "user.email", "streamlit@example.com"], check=False)
-        subprocess.run(["git", "config", "--global", "user.name", "Streamlit App"], check=False)
+        # Configure git user/email (local in container)
+        subprocess.run(["git", "config", "--global", "user.email", os.getenv("GITHUB_EMAIL", "streamlit@example.com")], check=False)
+        subprocess.run(["git", "config", "--global", "user.name", os.getenv("GITHUB_USER", "Streamlit App")], check=False)
 
         # Add file
         subprocess.run(["git", "add", str(file_path)], check=True)
 
-        # Commit - may fail if no changes; capture output
-        commit_proc = subprocess.run(["git", "commit", "-m", f"Add production data for {date_str}"], check=False, capture_output=True, text=True)
+        # Commit (may fail if no changes)
+        commit_proc = subprocess.run(
+            ["git", "commit", "-m", f"Add production data for {date_str}"],
+            check=False, capture_output=True, text=True
+        )
+
         if commit_proc.returncode != 0:
             stdout = commit_proc.stdout + commit_proc.stderr
-            # If nothing to commit, treat as OK (not an error)
             if "nothing to commit" in stdout.lower() or "no changes added to commit" in stdout.lower():
-                # No new changes - still treated as success but nothing pushed
                 return True, "File saved; no new changes to commit (already present)."
             else:
                 return False, f"Git commit failed: {stdout.strip()}"
 
         # Push
-        push_proc = subprocess.run(["git", "push", remote_url, "main"], check=False, capture_output=True, text=True)
+        push_proc = subprocess.run(
+            ["git", "push", remote_url, "main"],
+            check=False, capture_output=True, text=True
+        )
+
         if push_proc.returncode != 0:
             return False, f"Git push failed: {push_proc.stderr.strip() or push_proc.stdout.strip()}"
+
         return True, "File saved and pushed to GitHub successfully."
 
     except Exception as ex:
@@ -158,13 +164,11 @@ def rename_saved_csv(old_date: str, new_date: str) -> bool:
 def plot_production_pie(df: pd.DataFrame, theme_colors: list, title: str, value_col: str):
     """Return a plotly pie figure with labels and hover that includes value labels in the hover."""
     fig = px.pie(df, names="Plant", values=value_col, title=title, color_discrete_sequence=theme_colors)
-    # show percentage + value in hover
     fig.update_traces(textinfo="percent+label", hovertemplate="%{label}: %{value} (%{percent})<extra></extra>")
     return fig
 
 
 def plot_production_bar(df: pd.DataFrame, theme_colors: list, title: str, value_col: str):
-    """Return a plotly bar figure with values displayed on top of bars."""
     fig = px.bar(df, x="Plant", y=value_col, title=title, color="Plant", color_discrete_sequence=theme_colors, text=value_col)
     fig.update_traces(textposition="outside")
     fig.update_layout(uniformtext_minsize=8, uniformtext_mode="hide", xaxis_title=None, yaxis_title="m³")
@@ -220,24 +224,19 @@ if mode == "Upload New Data":
             st.error(msg)
             st.info("Make sure the Excel has exact headers and no merged cells. Example headers: Date, Plant, Production for the Day, Accumulative Production")
         else:
-            # show preview
             st.subheader("Preview of uploaded data (first rows)")
             st.dataframe(df_uploaded.head(20))
 
-            # Confirm checkbox & upload button
             st.write("Please confirm the data and then click upload.")
             confirm = st.checkbox("I confirm this data is correct and ready to upload")
             if confirm:
                 if st.button("Upload and Save to History"):
-                    # prepare df to save
                     df_save = ensure_date_column(df_uploaded, selected_date)
-                    # skip if date is Friday
                     weekday_name = pd.to_datetime(df_save["Date"].iloc[0]).day_name()
                     if weekday_name == "Friday":
                         st.error("Selected date is a Friday — Fridays are non-production days and will be ignored. Change the date or cancel.")
                     else:
                         pushed, message = save_csv_and_attempt_push(df_save, selected_date)
-                        # show clear messages
                         st.success(f"✅ Saved data to {DATA_DIR}/{selected_date.strftime('%Y-%m-%d')}.csv")
                         if pushed:
                             st.success(f"🚀 {message}")
@@ -245,11 +244,8 @@ if mode == "Upload New Data":
                             st.warning(f"⚠️ Could not push to GitHub automatically. {message}")
                             st.info("If you want automatic pushes, ensure your GITHUB_TOKEN and GITHUB_REPO are set in Streamlit Secrets (TOML). Otherwise you can manually upload the CSV file from the app container to your repo's data/ folder.")
 
-                        # Show totals and charts immediately
                         df_display = df_save.copy()
-                        # Remove any TOTAL row if exists
                         df_display = df_display[~df_display["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-                        # Convert numeric columns defensively
                         df_display["Production for the Day"] = pd.to_numeric(df_display["Production for the Day"], errors="coerce").fillna(0.0)
                         df_display["Accumulative Production"] = pd.to_numeric(df_display["Accumulative Production"], errors="coerce").fillna(0.0)
 
@@ -263,8 +259,6 @@ if mode == "Upload New Data":
                         st.subheader("📋 Uploaded Production Table")
                         st.dataframe(df_display, use_container_width=True)
 
-                        # Charts
-                        st.subheader("🌈 Production Charts (Uploaded)")
                         col1, col2 = st.columns(2)
                         with col1:
                             try:
@@ -279,7 +273,6 @@ if mode == "Upload New Data":
                             except Exception as e:
                                 st.error(f"Could not create bar chart: {e}")
 
-                        # Additional charts
                         try:
                             fig_line = plot_production_line(df_display, theme_colors, "Production Trend (Line)", "Production for the Day")
                             st.plotly_chart(fig_line, use_container_width=True)
@@ -292,14 +285,12 @@ if mode == "Upload New Data":
                         except Exception as e:
                             st.error(f"Could not create area chart: {e}")
 
-                        # Accumulative chart
                         try:
                             fig_acc = plot_production_bar(df_display, theme_colors, "Accumulative Production per Plant", "Accumulative Production")
                             st.plotly_chart(fig_acc, use_container_width=True)
                         except Exception as e:
                             st.error(f"Could not create accumulative chart: {e}")
 
-                        # Highest producer
                         try:
                             top = df_display.loc[df_display["Production for the Day"].astype(float).idxmax()]
                             st.success(f"🏆 Highest Producer: **{top['Plant']}** with {float(top['Production for the Day']):,.2f} m³")
@@ -321,31 +312,25 @@ elif mode == "View Historical Data":
             df_hist = None
 
         if df_hist is not None:
-            # Defensive: ensure Date column is standardized
             if "Date" in df_hist.columns:
                 try:
                     df_hist["Date"] = pd.to_datetime(df_hist["Date"]).dt.strftime("%Y-%m-%d")
                 except Exception:
                     pass
 
-            # Remove TOTAL row if present
             df_hist_display = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-
-            # Convert numeric columns defensively
             df_hist_display["Production for the Day"] = pd.to_numeric(df_hist_display["Production for the Day"], errors="coerce").fillna(0.0)
             df_hist_display["Accumulative Production"] = pd.to_numeric(df_hist_display["Accumulative Production"], errors="coerce").fillna(0.0)
 
             st.subheader(f"Data for {chosen}")
             st.dataframe(df_hist_display, use_container_width=True)
 
-            # Totals
             total_daily = df_hist_display["Production for the Day"].sum()
             total_acc = df_hist_display["Accumulative Production"].sum()
             st.markdown("#### 🔹 Totals")
             st.write(f"**Total Production for the Day:** {total_daily:,.2f} m³")
             st.write(f"**Total Accumulative Production:** {total_acc:,.2f} m³")
 
-            # Charts
             st.subheader("🌈 Production Charts (Historical)")
             try:
                 fig_pie = plot_production_pie(df_hist_display, theme_colors, f"Plant-wise Production — {chosen}", "Production for the Day")
@@ -371,14 +356,12 @@ elif mode == "View Historical Data":
             except Exception as e:
                 st.warning(f"Area chart error: {e}")
 
-            # Accumulative
             try:
                 fig_acc = plot_production_bar(df_hist_display, theme_colors, f"Accumulative Production — {chosen}", "Accumulative Production")
                 st.plotly_chart(fig_acc, use_container_width=True)
             except Exception as e:
                 st.error(f"Accumulative chart error: {e}")
 
-            # Top producer
             try:
                 top = df_hist_display.loc[df_hist_display["Production for the Day"].astype(float).idxmax()]
                 st.success(f"🏆 Highest Producer for {chosen}: **{top['Plant']}** ({float(top['Production for the Day']):,.2f} m³)")
@@ -410,10 +393,8 @@ elif mode == "Manage Data":
                 else:
                     st.error("Delete failed (file may not exist).")
 
-# Footer help
 st.sidebar.markdown("---")
 st.sidebar.write("If auto-push to GitHub fails, make sure:")
 st.sidebar.write("1) You added the token to Streamlit Secrets as TOML: `GITHUB_TOKEN = \"ghp_xxx\"`")
 st.sidebar.write(f"2) You set repo name as TOML: `GITHUB_REPO = \"{GITHUB_REPO}\"` (or set GITHUB_REPO env var).")
 st.sidebar.write("3) The app must have network/git access to push changes. Manual upload to repo/data is always an option.")
-
