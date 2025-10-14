@@ -193,46 +193,65 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ----------------------------
-# Plot helpers (enhanced with reinforced styling)
+# Plot helpers (enhanced with reinforced styling and error handling)
 # ----------------------------
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    if value_col not in df.columns or "Plant" not in df.columns:
+        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
     fig.update_traces(textinfo="percent+label", textfont=dict(size=14, weight=600, color="black"))
     fig.update_layout(
-        title=dict(text=title, font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-        legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title_text=title,
+        title_font=dict(family="Arial", size=18, weight=700, color="black"),
+        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(t=60, b=40, l=40, r=40),
-        showlegend=True,
         plot_bgcolor="white",
-        paper_bgcolor="white"
+        paper_bgcolor="white",
+        showlegend=True
     )
     return fig
 
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    if value_col not in df.columns or "Plant" not in df.columns:
+        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
     fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, weight=600, color="black"))
     fig.update_layout(
-        title=dict(text=title, font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-        xaxis=dict(title="Plant", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black"), tickangle=-45),
-        yaxis=dict(title=value_col, titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title_text=title,
+        title_font=dict(family="Arial", size=18, weight=700, color="black"),
+        xaxis_title="Plant",
+        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        yaxis_title=value_col,
+        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(t=60, b=80, l=60, r=40),
         plot_bgcolor="white",
         paper_bgcolor="white",
         xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0",
-        bargap=0.2
+        yaxis_gridcolor="#E0E0E0"
     )
     return fig
 
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    if value_col not in df.columns or "Plant" not in df.columns:
+        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
     fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
     fig.update_layout(
-        title=dict(text=title, font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-        xaxis=dict(title="Plant", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        yaxis=dict(title=value_col, titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title_text=title,
+        title_font=dict(family="Arial", size=18, weight=700, color="black"),
+        xaxis_title="Plant",
+        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        yaxis_title=value_col,
+        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(t=60, b=40, l=60, r=40),
         plot_bgcolor="white",
         paper_bgcolor="white",
@@ -242,13 +261,21 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    if value_col not in df.columns or "Plant" not in df.columns:
+        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
     fig.update_traces(line=dict(width=2), opacity=0.8)
     fig.update_layout(
-        title=dict(text=title, font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-        xaxis=dict(title="Plant", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        yaxis=dict(title=value_col, titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title_text=title,
+        title_font=dict(family="Arial", size=18, weight=700, color="black"),
+        xaxis_title="Plant",
+        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        yaxis_title=value_col,
+        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(t=60, b=40, l=60, r=40),
         plot_bgcolor="white",
         paper_bgcolor="white",
@@ -259,20 +286,27 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
 
 # New: Weekly/Monthly bar chart helper
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    if value_col not in df.columns or group_col not in df.columns:
+        raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
     agg_df = df.groupby(group_col)[value_col].sum().reset_index().sort_values(value_col, ascending=False)
     fig = px.bar(agg_df, x=group_col, y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
     fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, weight=600, color="black"))
     fig.update_layout(
-        title=dict(text=title, font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-        xaxis=dict(title=group_col, titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black"), tickangle=-45),
-        yaxis=dict(title=value_col, titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-        legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title_text=title,
+        title_font=dict(family="Arial", size=18, weight=700, color="black"),
+        xaxis_title=group_col,
+        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        yaxis_title=value_col,
+        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(t=60, b=80, l=60, r=40),
         plot_bgcolor="white",
         paper_bgcolor="white",
         xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0",
-        bargap=0.2
+        yaxis_gridcolor="#E0E0E0"
     )
     return fig
 
@@ -378,8 +412,6 @@ theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=li
 st.session_state["theme"] = theme_choice
 theme_colors = COLOR_THEMES[theme_choice]
 
-debug_styling = st.sidebar.checkbox("Show Debug Styling Info", value=False)  # Temporary debug option
-
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=10.0)
 st.sidebar.markdown("---")
 st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
@@ -452,28 +484,20 @@ if mode == "Upload New Data":
                     with c1:
                         pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production Share")
                         st.plotly_chart(pie_fig, use_container_width=True)
-                        if debug_styling:
-                            st.write("Pie Chart: Title font size 18, weight 700; Legend font size 14, weight 600")
                     with c2:
                         bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant")
                         st.plotly_chart(bar_fig, use_container_width=True)
-                        if debug_styling:
-                            st.write("Bar Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
                     try:
                         line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production Trend")
                         area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production Flow")
                         st.plotly_chart(line_fig, use_container_width=True)
                         st.plotly_chart(area_fig, use_container_width=True)
-                        if debug_styling:
-                            st.write("Line/Area Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
                     except Exception as e:
                         st.warning(f"Additional charts error: {e}")
 
                     try:
                         acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production")
                         st.plotly_chart(acc_fig, use_container_width=True)
-                        if debug_styling:
-                            st.write("Accumulative Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
                     except Exception:
                         st.info("No accumulative chart available.")
 
@@ -525,20 +549,14 @@ elif mode == "View Historical Data":
         with c1:
             pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Share — {selected}")
             st.plotly_chart(pie_fig, use_container_width=True)
-            if debug_styling:
-                st.write("Pie Chart: Title font size 18, weight 700; Legend font size 14, weight 600")
         with c2:
             bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
             st.plotly_chart(bar_fig, use_container_width=True)
-            if debug_styling:
-                st.write("Bar Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
         try:
             line_fig = line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Trend — {selected}")
             area_fig = area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Flow — {selected}")
             st.plotly_chart(line_fig, use_container_width=True)
             st.plotly_chart(area_fig, use_container_width=True)
-            if debug_styling:
-                st.write("Line/Area Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
         except Exception as e:
             st.warning(f"Chart error: {e}")
 
@@ -546,8 +564,6 @@ elif mode == "View Historical Data":
             try:
                 acc_fig = bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Production — {selected}")
                 st.plotly_chart(acc_fig, use_container_width=True)
-                if debug_styling:
-                    st.write("Accumulative Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
             except Exception as e:
                 st.warning(f"Acc cumulative chart error: {e}")
         else:
@@ -648,10 +664,16 @@ elif mode == "Analytics":
             trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
             trend_fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
             trend_fig.update_layout(
-                title=dict(text=f"Production Trend ({start_date} to {end_date})", font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-                xaxis=dict(title="Date", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-                yaxis=dict(title="m³", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-                legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                title_text=f"Production Trend ({start_date} to {end_date})",
+                title_font=dict(family="Arial", size=18, weight=700, color="black"),
+                xaxis_title="Date",
+                xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+                xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+                yaxis_title="m³",
+                yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+                yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+                legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 margin=dict(t=60, b=40, l=60, r=40),
                 plot_bgcolor="white",
                 paper_bgcolor="white",
@@ -659,8 +681,6 @@ elif mode == "Analytics":
                 yaxis_gridcolor="#E0E0E0"
             )
             st.plotly_chart(trend_fig, use_container_width=True)
-            if debug_styling:
-                st.write("Trend Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
             
             # Weekly and Monthly Analysis
             filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
@@ -669,8 +689,6 @@ elif mode == "Analytics":
             monthly_fig = aggregated_bar_chart(filtered_df, "Production for the Day", "Month", theme_colors, "Monthly Production Totals")
             st.plotly_chart(weekly_fig, use_container_width=True)
             st.plotly_chart(monthly_fig, use_container_width=True)
-            if debug_styling:
-                st.write("Weekly/Monthly Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
             
             # Top plants over the range
             st.markdown("Top plants over the selected range")
@@ -680,10 +698,16 @@ elif mode == "Analytics":
                 top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
                 top_fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
                 top_fig.update_layout(
-                    title=dict(text="Top Plants Production", font=dict(family="Arial", size=18, weight=700, color="black"), x=0.5, xanchor="center"),
-                    xaxis=dict(title="Date", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-                    yaxis=dict(title="m³", titlefont=dict(family="Arial", size=14, weight=600, color="black"), tickfont=dict(family="Arial", size=12, weight=600, color="black")),
-                    legend=dict(font=dict(family="Arial", size=14, weight=600, color="black"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    title_text="Top Plants Production",
+                    title_font=dict(family="Arial", size=18, weight=700, color="black"),
+                    xaxis_title="Date",
+                    xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+                    xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+                    yaxis_title="m³",
+                    yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
+                    yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
+                    legend_font=dict(family="Arial", size=14, weight=600, color="black"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                     margin=dict(t=60, b=40, l=60, r=40),
                     plot_bgcolor="white",
                     paper_bgcolor="white",
@@ -691,8 +715,6 @@ elif mode == "Analytics":
                     yaxis_gridcolor="#E0E0E0"
                 )
                 st.plotly_chart(top_fig, use_container_width=True)
-                if debug_styling:
-                    st.write("Top Plants Chart: Title font size 18, weight 700; Axis fonts size 14/12, weight 600")
 
         # New: PDF Export with Data in Analytics mode
         st.markdown("### Export Report")
