@@ -1,16 +1,16 @@
-# app.py
 """
 Production Dashboard - Full long version (fixed rerun)
 - Secure login (hashed users or set via Streamlit Secrets)
 - Upload Excel, choose date, confirm, save to data/YYYY-MM-DD.csv
-- Attempt automatic push to GitHub via token & repo from Streamlit Secrets
+- Attempt automatic push to GitHub via REST API
 - Historical viewer, rename/delete, charts, themes, alerts, AI-style summary
 - Uses st.rerun() (not deprecated experimental_rerun)
 """
 
 import os
 import hashlib
-import subprocess
+import base64
+import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, List
@@ -39,7 +39,6 @@ REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 # ----------------------------
 # Read secrets / env
 # ----------------------------
-# Streamlit secrets available as st.secrets (mapping). Fallback to os.environ if necessary.
 SECRETS = {}
 try:
     SECRETS = dict(st.secrets)
@@ -57,13 +56,11 @@ GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streaml
 # ----------------------------
 # Default users (hashed)
 # ----------------------------
-# For initial testing ONLY — change these via Streamlit Secrets "USERS" mapping ASAP.
 _default_users = {
-    "admin": hashlib.sha256("admin123".encode()).hexdigest()
+    "admin": hashlib.sha256("kbrc123".encode()).hexdigest()
 }
-USERS: Dict[str,str] = _default_users.copy()
+USERS: Dict[str, str] = _default_users.copy()
 if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
-    # Expect mapping: {"user1": "<sha256hash>", ...}
     for k, v in SECRETS["USERS"].items():
         USERS[k] = v
 
@@ -87,7 +84,6 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def check_credentials(username: str, password: str) -> bool:
-    """Return True if username exists and password matches (hashed)."""
     if not username:
         return False
     user = username.strip()
@@ -96,7 +92,6 @@ def check_credentials(username: str, password: str) -> bool:
     return False
 
 def login_ui():
-    """Render login form in the sidebar. On success set session state and rerun."""
     st.sidebar.subheader("🔐 Login")
     with st.sidebar.form("login_form"):
         username = st.text_input("Username", key="login_user")
@@ -106,13 +101,11 @@ def login_ui():
             if check_credentials(username, password):
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = username.strip()
-                # use st.rerun() (not experimental)
                 st.rerun()
             else:
                 st.sidebar.error("Invalid username or password")
 
 def logout():
-    """Clear session and rerun to show login again."""
     if "logged_in" in st.session_state:
         del st.session_state["logged_in"]
     if "username" in st.session_state:
@@ -158,31 +151,39 @@ def delete_saved(date_str: str) -> bool:
         return True
     return False
 
-def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool,str]:
-    """Attempt to git add/commit/push a file using token in GITHUB_TOKEN & GITHUB_REPO"""
+def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return False, "GITHUB_TOKEN or GITHUB_REPO not configured in app secrets."
-    remote = f"https://{GITHUB_TOKEN}@github.com/{GITHUB_REPO}.git"
+
     try:
-        # Set basic git config so commits have a user
-        subprocess.run(["git", "config", "--global", "user.email", GITHUB_EMAIL], check=False)
-        subprocess.run(["git", "config", "--global", "user.name", GITHUB_USER], check=False)
-        subprocess.run(["git", "add", str(file_path)], check=True)
-        commit = subprocess.run(["git", "commit", "-m", commit_message], capture_output=True, text=True)
-        # If commit returned non-zero
-        if commit.returncode != 0:
-            out = (commit.stdout or "") + (commit.stderr or "")
-            lower = out.lower()
-            if "nothing to commit" in lower or "no changes added to commit" in lower:
-                return True, "No changes to commit (file already present / identical)."
-            return False, f"Git commit failed: {out.strip()}"
-        # push
-        push = subprocess.run(["git", "push", remote, "main"], capture_output=True, text=True)
-        if push.returncode != 0:
-            return False, f"Git push failed: {push.stderr.strip() or push.stdout.strip()}"
-        return True, "Pushed to GitHub successfully."
+        repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
+        api_url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
+
+        with open(file_path, "rb") as f:
+            content_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        resp = requests.get(api_url, headers=headers)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+
+        payload = {
+            "message": commit_message,
+            "content": content_b64,
+            "branch": "main",
+            "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}
+        }
+        if sha:
+            payload["sha"] = sha
+
+        r = requests.put(api_url, headers=headers, json=payload)
+        if r.status_code in [200, 201]:
+            return True, f"✅ Successfully uploaded to GitHub: data/{file_path.name}"
+        else:
+            err = r.json().get("message", r.text)
+            return False, f"❌ GitHub upload failed: {err}"
+
     except Exception as e:
-        return False, f"Exception while pushing to GitHub: {e}"
+        return False, f"Exception during GitHub upload: {e}"
 
 # ----------------------------
 # Plot helpers
@@ -252,7 +253,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
                     if plant in avg7.index:
                         avg = avg7.loc[plant]
                         if avg != 0:
-                            pct = (today - avg)/avg*100
+                            pct = (today - avg) / avg * 100
                             if abs(pct) >= 10:
                                 if pct > 0:
                                     notes.append(f"{plant} is up {pct:.1f}% vs its 7-day avg.")
@@ -323,7 +324,6 @@ if mode == "Upload New Data":
             if confirm and st.button("Upload & Save to History"):
                 df_save = df_uploaded.copy()
                 df_save["Date"] = selected_date.strftime("%Y-%m-%d")
-                # Friday check
                 if pd.to_datetime(df_save["Date"].iloc[0]).day_name() == "Friday":
                     st.error("Selected date is Friday (non-production). Change date or cancel.")
                 else:
@@ -333,7 +333,6 @@ if mode == "Upload New Data":
                         st.error(str(e))
                         st.stop()
                     st.success(f"Saved to {saved_path}")
-                    # Try push
                     pushed, message = attempt_git_push(saved_path, f"Add production data for {selected_date.strftime('%Y-%m-%d')}")
                     if pushed:
                         st.success(message)
@@ -341,7 +340,6 @@ if mode == "Upload New Data":
                         st.warning(message)
                         st.info("If push failed, manually upload the CSV into your repo's data/ folder via GitHub UI.")
 
-                    # Display analytics for uploaded file
                     df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                     df_display = safe_numeric(df_display)
                     st.markdown("### Totals")
@@ -413,7 +411,6 @@ elif mode == "View Historical Data":
         st.subheader(f"Data for {selected}")
         st.dataframe(df_hist_disp, use_container_width=True)
 
-        # Totals & charts
         total_daily = df_hist_disp["Production for the Day"].sum()
         total_acc = df_hist_disp["Accumulative Production"].sum()
         st.markdown("### Totals")
@@ -436,7 +433,6 @@ elif mode == "View Historical Data":
         else:
             st.warning("No 'Accumulative Production' column in this file.")
 
-        # Rankings
         try:
             frames = [load_saved(d) for d in list_saved_dates()]
             all_df = pd.concat(frames, ignore_index=True)
@@ -455,7 +451,6 @@ elif mode == "View Historical Data":
         except Exception:
             st.info("Not enough data for rankings.")
 
-        # AI summary
         try:
             frames = [load_saved(d) for d in list_saved_dates()]
             all_hist = pd.concat(frames, ignore_index=True)
