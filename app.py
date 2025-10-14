@@ -600,7 +600,7 @@ elif mode == "Analytics":
         else:
             totals = filtered_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
             totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
-            trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}"))
+            trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
             st.plotly_chart(trend_fig, use_container_width=True)
             
             # Weekly and Monthly Analysis
