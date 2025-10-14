@@ -21,14 +21,15 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export with charts
+# For PDF export with charts (using Orca)
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
 import plotly.io as pio
+import psutil  # For Orca process management in cloud
 
-# Set Plotly renderer for image export
-pio.renderers.default = "png"
+# Set Plotly renderer to Orca
+pio.renderers.default = "orca"
 
 # ----------------------------
 # Page config
@@ -282,7 +283,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Updated: PDF Report Generator with Charts (with Kaleido fallback)
+# Updated: PDF Report Generator with Charts (using Orca)
 def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
@@ -307,8 +308,8 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     if charts:
         for chart_type, fig in charts.items():
             try:
-                # Export chart as PNG using Kaleido
-                img_data = fig.to_image(format="png", width=400, height=300, scale=2)
+                # Export chart as PNG using Orca
+                img_data = fig.to_image(format="png", width=400, height=300, scale=2, engine="orca")
                 img_path = f"temp_{chart_type}.png"
                 with open(img_path, "wb") as f:
                     f.write(img_data)
@@ -317,9 +318,9 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
                 # Clean up temporary file
                 os.remove(img_path)
             except Exception as e:
-                st.warning(f"Failed to add {chart_type} chart to PDF: {e} (Charts disabled due to environment limitations)")
+                st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
                 # Fallback: Add text note
-                story.append(Paragraph(f"{chart_type} Chart: Export failed - Charts are unavailable in this environment.", styles['Normal']))
+                story.append(Paragraph(f"{chart_type} Chart: Export failed - Check dependencies.", styles['Normal']))
                 story.append(Spacer(1, 12))
     
     doc.build(story)
