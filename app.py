@@ -28,7 +28,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 import plotly.io as pio
 import psutil
 
-# Set Plotly renderer to browser (no external binaries required)
+# Explicitly set Plotly renderer to browser (no external binaries)
 pio.renderers.default = "browser"
 
 # ----------------------------
@@ -308,8 +308,8 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     if charts:
         for chart_type, fig in charts.items():
             try:
-                # Export chart as PNG using browser renderer
-                img_data = fig.to_image(format="png", width=400, height=300, scale=2)
+                # Explicitly use browser renderer for image export
+                img_data = fig.to_image(format="png", width=400, height=300, scale=2, engine="browser")
                 img_path = f"temp_{chart_type}.png"
                 with open(img_path, "wb") as f:
                     f.write(img_data)
@@ -320,7 +320,7 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
             except Exception as e:
                 st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
                 # Fallback: Add text note
-                story.append(Paragraph(f"{chart_type} Chart: Export failed.", styles['Normal']))
+                story.append(Paragraph(f"{chart_type} Chart: Export failed. See app logs for details.", styles['Normal']))
                 story.append(Spacer(1, 12))
     
     doc.build(story)
