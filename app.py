@@ -21,15 +21,22 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export with charts (using Orca)
+# For PDF export with charts
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
 import plotly.io as pio
-import psutil  # For Orca process management in cloud
+import psutil  # For Orca process management attempt
 
-# Set Plotly renderer to Orca
-pio.renderers.default = "orca"
+# Attempt to set Orca renderer, fall back if unavailable
+try:
+    pio.renderers.default = "orca"
+    st.write("Orca renderer initialized successfully.")
+except ValueError:
+    st.warning("Orca renderer unavailable. Charts will be excluded from PDFs.")
+    orca_available = False
+else:
+    orca_available = True
 
 # ----------------------------
 # Page config
@@ -283,7 +290,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Updated: PDF Report Generator with Charts (using Orca)
+# Updated: PDF Report Generator with Charts (with Orca fallback)
 def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
@@ -304,8 +311,8 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
     story.append(Spacer(1, 12))
     
-    # Add charts if provided
-    if charts:
+    # Add charts if provided and Orca is available
+    if charts and orca_available:
         for chart_type, fig in charts.items():
             try:
                 # Export chart as PNG using Orca
@@ -320,8 +327,13 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
             except Exception as e:
                 st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
                 # Fallback: Add text note
-                story.append(Paragraph(f"{chart_type} Chart: Export failed - Check dependencies.", styles['Normal']))
+                story.append(Paragraph(f"{chart_type} Chart: Export failed.", styles['Normal']))
                 story.append(Spacer(1, 12))
+    elif charts and not orca_available:
+        st.warning("Charts excluded from PDF due to missing Orca renderer.")
+        for chart_type in charts.keys():
+            story.append(Paragraph(f"{chart_type} Chart: Not available.", styles['Normal']))
+            story.append(Spacer(1, 12))
     
     doc.build(story)
     with open(buffer, "rb") as f:
