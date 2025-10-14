@@ -4,7 +4,7 @@ Production Dashboard - Full long version (fixed rerun)
 - Upload Excel, choose date, confirm, save to data/YYYY-MM-DD.csv
 - Attempt automatic push to GitHub via REST API
 - Historical viewer, rename/delete, charts, themes, alerts, AI-style summary
-- New: Custom date range filters, PDF export with charts, weekly/monthly charts in Analytics
+- New: Custom date range filters, PDF export with charts (using Orca), weekly/monthly charts in Analytics
 - Uses st.rerun() (not deprecated experimental_rerun)
 """
 
@@ -21,14 +21,15 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export with charts
+# For PDF export with charts (using Orca for compatibility)
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
 import plotly.io as pio
+import psutil  # For Orca process management in cloud
 
-# Set Plotly renderer for image export
-pio.renderers.default = "png"
+# Set Plotly renderer to Orca (avoids Kaleido/Chrome dependency)
+pio.renderers.default = "orca"
 
 # ----------------------------
 # Page config
@@ -282,7 +283,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Updated: PDF Report Generator with Charts
+# Updated: PDF Report Generator with Charts (using Orca)
 def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
@@ -307,8 +308,8 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     if charts:
         for chart_type, fig in charts.items():
             try:
-                # Export chart as PNG
-                img_data = fig.to_image(format="png", width=400, height=300, scale=2)
+                # Export chart as PNG using Orca (no Chrome needed)
+                img_data = fig.to_image(format="png", width=400, height=300, scale=2, engine="orca")
                 img_path = f"temp_{chart_type}.png"
                 with open(img_path, "wb") as f:
                     f.write(img_data)
@@ -318,6 +319,9 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
                 os.remove(img_path)
             except Exception as e:
                 st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
+                # Fallback: Add text note
+                story.append(Paragraph(f"{chart_type} Chart: Export failed - {str(e)}", styles['Normal']))
+                story.append(Spacer(1, 12))
     
     doc.build(story)
     with open(buffer, "rb") as f:
@@ -342,288 +346,4 @@ if st.sidebar.button("Logout"):
     logout()
 
 mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Classic")))
-st.session_state["theme"] = theme_choice
-theme_colors = COLOR_THEMES[theme_choice]
-
-alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=10.0)
-st.sidebar.markdown("---")
-st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
-
-st.title("PRODUCTION FOR THE DAY")
-
-# ----------------------------
-# Upload mode
-# ----------------------------
-if mode == "Upload New Data":
-    st.header("Upload new daily production file")
-    uploaded = st.file_uploader("Upload Excel (.xlsx) containing: Plant, Production for the Day, Accumulative Production", type=["xlsx"])
-    selected_date = st.date_input("Which date is this file for?", value=datetime.today())
-
-    if uploaded:
-        try:
-            df_uploaded = pd.read_excel(uploaded)
-            df_uploaded.columns = df_uploaded.columns.str.strip().str.replace("\n"," ").str.replace("  "," ")
-        except Exception as e:
-            st.error(f"Failed to read: {e}")
-            st.stop()
-
-        # Validate
-        missing = [c for c in REQUIRED_COLS if c not in df_uploaded.columns]
-        if missing:
-            st.error(f"Missing columns: {missing}. Expected: {REQUIRED_COLS}")
-        else:
-            st.subheader("Preview")
-            st.dataframe(df_uploaded.head(20))
-            target_path = DATA_DIR / f"{selected_date.strftime('%Y-%m-%d')}.csv"
-            overwrite = False
-            if target_path.exists():
-                overwrite = st.checkbox("File for this date already exists — check to overwrite", value=False)
-            confirm = st.checkbox("I confirm this data is correct and ready to upload")
-            if confirm and st.button("Upload & Save to History"):
-                df_save = df_uploaded.copy()
-                df_save["Date"] = selected_date.strftime("%Y-%m-%d")
-                if pd.to_datetime(df_save["Date"].iloc[0]).day_name() == "Friday":
-                    st.error("Selected date is Friday (non-production). Change date or cancel.")
-                else:
-                    try:
-                        saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
-                    except FileExistsError as e:
-                        st.error(str(e))
-                        st.stop()
-                    st.success(f"Saved to {saved_path}")
-                    pushed, message = attempt_git_push(saved_path, f"Add production data for {selected_date.strftime('%Y-%m-%d')}")
-                    if pushed:
-                        st.success(message)
-                    else:
-                        st.warning(message)
-                        st.info("If push failed, manually upload the CSV into your repo's data/ folder via GitHub UI.")
-
-                    df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-                    df_display = safe_numeric(df_display)
-                    st.markdown("### Totals")
-                    total_daily = df_display["Production for the Day"].sum()
-                    total_acc = df_display["Accumulative Production"].sum()
-                    st.write(f"- Total Production for the Day: **{total_daily:,.2f} m³**")
-                    st.write(f"- Total Accumulative Production: **{total_acc:,.2f} m³**")
-
-                    alerts = df_display[df_display["Production for the Day"] < alert_threshold]
-                    if not alerts.empty:
-                        st.warning("⚠️ Plants below threshold:")
-                        for _, r in alerts.iterrows():
-                            st.write(f"- {r['Plant']}: {r['Production for the Day']} m³")
-
-                    st.markdown("### Charts")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production share (Pie)")
-                        st.plotly_chart(pie_fig, use_container_width=True)
-                    with c2:
-                        bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant (Bar)")
-                        st.plotly_chart(bar_fig, use_container_width=True)
-                    try:
-                        line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production trend (Line)")
-                        area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production flow (Area)")
-                        st.plotly_chart(line_fig, use_container_width=True)
-                        st.plotly_chart(area_fig, use_container_width=True)
-                    except Exception as e:
-                        st.warning(f"Additional charts error: {e}")
-
-                    try:
-                        acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production")
-                        st.plotly_chart(acc_fig, use_container_width=True)
-                    except Exception:
-                        st.info("No accumulative chart available.")
-
-                    try:
-                        top = df_display.loc[df_display["Production for the Day"].idxmax()]
-                        st.success(f"🏆 Highest Producer: {top['Plant']} — {float(top['Production for the Day']):,.2f} m³")
-                    except Exception:
-                        pass
-
-                    # New: PDF Export with Charts in Upload mode
-                    st.markdown("### Export Report")
-                    charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"), charts)
-
-# ----------------------------
-# View Historical Data
-# ----------------------------
-elif mode == "View Historical Data":
-    st.header("Historical Data Viewer")
-    saved_list = list_saved_dates()
-    if not saved_list:
-        st.info("No saved history yet.")
-    else:
-        selected = st.selectbox("Select date to view", saved_list, index=0)
-        try:
-            df_hist = load_saved(selected)
-        except Exception as e:
-            st.error(f"Unable to load: {e}")
-            st.stop()
-
-        if "Date" in df_hist.columns:
-            try:
-                df_hist["Date"] = pd.to_datetime(df_hist["Date"]).dt.strftime("%Y-%m-%d")
-            except Exception:
-                pass
-
-        df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-        df_hist_disp = safe_numeric(df_hist_disp)
-
-        st.subheader(f"Data for {selected}")
-        st.dataframe(df_hist_disp, use_container_width=True)
-
-        total_daily = df_hist_disp["Production for the Day"].sum()
-        total_acc = df_hist_disp["Accumulative Production"].sum()
-        st.markdown("### Totals")
-        st.write(f"- Total: **{total_daily:,.2f} m³** — Accumulative: **{total_acc:,.2f} m³**")
-
-        st.markdown("### Charts")
-        c1, c2 = st.columns(2)
-        with c1:
-            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production share — {selected}")
-            st.plotly_chart(pie_fig, use_container_width=True)
-        with c2:
-            bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
-            st.plotly_chart(bar_fig, use_container_width=True)
-        try:
-            line_fig = line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production trend — {selected}")
-            area_fig = area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production flow — {selected}")
-            st.plotly_chart(line_fig, use_container_width=True)
-            st.plotly_chart(area_fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Chart error: {e}")
-
-        if "Accumulative Production" in df_hist_disp.columns:
-            try:
-                acc_fig = bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}")
-                st.plotly_chart(acc_fig, use_container_width=True)
-            except Exception as e:
-                st.warning(f"Acc cumulative chart error: {e}")
-        else:
-            st.warning("No 'Accumulative Production' column in this file.")
-
-        try:
-            frames = [load_saved(d) for d in list_saved_dates()]
-            all_df = pd.concat(frames, ignore_index=True)
-            ranks = compute_rankings(all_df, selected)
-            st.markdown("### Rankings")
-            ra, rb, rc = st.columns(3)
-            with ra:
-                st.write("Daily")
-                st.dataframe(ranks['daily'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-            with rb:
-                st.write("Weekly (last 7 days)")
-                st.dataframe(ranks['weekly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-            with rc:
-                st.write("Monthly (last 30 days)")
-                st.dataframe(ranks['monthly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-        except Exception:
-            st.info("Not enough data for rankings.")
-
-        try:
-            frames = [load_saved(d) for d in list_saved_dates()]
-            all_hist = pd.concat(frames, ignore_index=True)
-            summary_md = ai_summary(df_hist_disp, all_hist, selected)
-            st.markdown("### Quick Summary")
-            st.markdown(summary_md)
-        except Exception:
-            pass
-
-        # New: PDF Export with Charts in Historical mode
-        st.markdown("### Export Report")
-        charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-        generate_pdf_report(df_hist_disp, selected, charts)
-
-# ----------------------------
-# Manage Data
-# ----------------------------
-elif mode == "Manage Data":
-    st.header("Manage saved files (rename / delete)")
-    saved_list = list_saved_dates()
-    if not saved_list:
-        st.info("No saved files.")
-    else:
-        chosen = st.selectbox("Select date", saved_list)
-        action = st.radio("Action", ["Rename", "Delete"])
-
-        if action == "Rename":
-            new_date = st.date_input("Choose new date", value=datetime.today())
-            if st.button("Confirm rename"):
-                try:
-                    ok = rename_saved(chosen, new_date.strftime("%Y-%m-%d"))
-                    if ok:
-                        st.success(f"Renamed {chosen} → {new_date.strftime('%Y-%m-%d')}")
-                    else:
-                        st.error("Rename failed.")
-                except Exception as e:
-                    st.error(f"Rename error: {e}")
-        else:
-            st.warning("This will permanently delete the selected file.")
-            if st.button("Confirm delete"):
-                try:
-                    if delete_saved(chosen):
-                        st.success("Deleted.")
-                    else:
-                        st.error("Delete failed.")
-                except Exception as e:
-                    st.error(f"Delete error: {e}")
-
-# ----------------------------
-# Analytics
-# ----------------------------
-elif mode == "Analytics":
-    st.header("Analytics & trends (multi-day)")
-    saved = list_saved_dates()
-    if len(saved) < 2:
-        st.info("Upload at least two days to see multi-day analytics.")
-    else:
-        # Custom date range filter
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
-        with col2:
-            end_date = st.date_input("End Date", value=datetime.today())
-        
-        frames = [load_saved(d) for d in saved]
-        all_df = pd.concat(frames, ignore_index=True)
-        all_df['Date'] = pd.to_datetime(all_df['Date'])
-        
-        # Filter data
-        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
-        if filtered_df.empty:
-            st.warning("No data in selected range.")
-        else:
-            totals = filtered_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
-            totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
-            trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
-            st.plotly_chart(trend_fig, use_container_width=True)
-            
-            # Weekly and Monthly Analysis
-            filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
-            filtered_df['Month'] = filtered_df['Date'].dt.month
-            weekly_fig = aggregated_bar_chart(filtered_df, "Production for the Day", "Week", theme_colors, "Weekly Production Totals")
-            monthly_fig = aggregated_bar_chart(filtered_df, "Production for the Day", "Month", theme_colors, "Monthly Production Totals")
-            st.plotly_chart(weekly_fig, use_container_width=True)
-            st.plotly_chart(monthly_fig, use_container_width=True)
-            
-            # Top plants over the range
-            st.markdown("Top plants over the selected range")
-            pivot = filtered_df.groupby(['Date','Plant'])['Production for the Day'].sum().reset_index()
-            topplants = pivot.groupby('Plant')['Production for the Day'].sum().nlargest(5).index.tolist()
-            if topplants:
-                top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
-                st.plotly_chart(top_fig, use_container_width=True)
-
-            # New: PDF Export with Charts in Analytics mode
-            st.markdown("### Export Report")
-            charts = {"Trend": trend_fig, "Weekly": weekly_fig, "Monthly": monthly_fig, "Top Plants": top_fig}
-            generate_pdf_report(filtered_df, f"{start_date} to {end_date}", charts)
-
-# ----------------------------
-# Sidebar help & closing
-# ----------------------------
-st.sidebar.markdown("---")
-st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
-st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder.")
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()),
