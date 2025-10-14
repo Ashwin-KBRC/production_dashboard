@@ -4,7 +4,7 @@ Production Dashboard - Full long version (fixed rerun)
 - Upload Excel, choose date, confirm, save to data/YYYY-MM-DD.csv
 - Attempt automatic push to GitHub via REST API
 - Historical viewer, rename/delete, charts, themes, alerts, AI-style summary
-- New: Custom date range filters, PDF export, weekly/monthly charts in Analytics
+- New: Custom date range filters, PDF export with charts, weekly/monthly charts in Analytics
 - Uses st.rerun() (not deprecated experimental_rerun)
 """
 
@@ -21,10 +21,14 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export
+# For PDF export with charts
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
+import plotly.io as pio
+
+# Set Plotly renderer for image export
+pio.renderers.default = "png"
 
 # ----------------------------
 # Page config
@@ -278,8 +282,8 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# New: PDF Report Generator
-def generate_pdf_report(df: pd.DataFrame, date_str: str):
+# Updated: PDF Report Generator with Charts
+def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
     doc = SimpleDocTemplate(str(buffer), pagesize=letter)
@@ -292,10 +296,28 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str):
     data = [df.columns.tolist()] + df.values.tolist()
     table = Table(data)
     story.append(table)
+    story.append(Spacer(1, 12))
     
     # Add summary text
     total = df["Production for the Day"].sum()
     story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
+    story.append(Spacer(1, 12))
+    
+    # Add charts if provided
+    if charts:
+        for chart_type, fig in charts.items():
+            try:
+                # Export chart as PNG
+                img_data = fig.to_image(format="png", width=400, height=300, scale=2)
+                img_path = f"temp_{chart_type}.png"
+                with open(img_path, "wb") as f:
+                    f.write(img_data)
+                story.append(Image(img_path, width=400, height=300))
+                story.append(Spacer(1, 12))
+                # Clean up temporary file
+                os.remove(img_path)
+            except Exception as e:
+                st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
     
     doc.build(story)
     with open(buffer, "rb") as f:
@@ -394,23 +416,22 @@ if mode == "Upload New Data":
                     st.markdown("### Charts")
                     c1, c2 = st.columns(2)
                     with c1:
-                        try:
-                            st.plotly_chart(pie_chart(df_display, "Production for the Day", theme_colors, "Production share (Pie)"), use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Pie chart error: {e}")
+                        pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production share (Pie)")
+                        st.plotly_chart(pie_fig, use_container_width=True)
                     with c2:
-                        try:
-                            st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant (Bar)"), use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Bar chart error: {e}")
+                        bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant (Bar)")
+                        st.plotly_chart(bar_fig, use_container_width=True)
                     try:
-                        st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Production trend (Line)"), use_container_width=True)
-                        st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Production flow (Area)"), use_container_width=True)
+                        line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production trend (Line)")
+                        area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production flow (Area)")
+                        st.plotly_chart(line_fig, use_container_width=True)
+                        st.plotly_chart(area_fig, use_container_width=True)
                     except Exception as e:
                         st.warning(f"Additional charts error: {e}")
 
                     try:
-                        st.plotly_chart(bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production"), use_container_width=True)
+                        acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production")
+                        st.plotly_chart(acc_fig, use_container_width=True)
                     except Exception:
                         st.info("No accumulative chart available.")
 
@@ -420,9 +441,10 @@ if mode == "Upload New Data":
                     except Exception:
                         pass
 
-                    # New: PDF Export in Upload mode
+                    # New: PDF Export with Charts in Upload mode
                     st.markdown("### Export Report")
-                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"))
+                    charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
+                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"), charts)
 
 # ----------------------------
 # View Historical Data
@@ -458,17 +480,25 @@ elif mode == "View Historical Data":
         st.write(f"- Total: **{total_daily:,.2f} m³** — Accumulative: **{total_acc:,.2f} m³**")
 
         st.markdown("### Charts")
+        c1, c2 = st.columns(2)
+        with c1:
+            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production share — {selected}")
+            st.plotly_chart(pie_fig, use_container_width=True)
+        with c2:
+            bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
+            st.plotly_chart(bar_fig, use_container_width=True)
         try:
-            st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production share — {selected}"), use_container_width=True)
-            st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}"), use_container_width=True)
-            st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production trend — {selected}"), use_container_width=True)
-            st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production flow — {selected}"), use_container_width=True)
+            line_fig = line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production trend — {selected}")
+            area_fig = area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production flow — {selected}")
+            st.plotly_chart(line_fig, use_container_width=True)
+            st.plotly_chart(area_fig, use_container_width=True)
         except Exception as e:
             st.warning(f"Chart error: {e}")
 
         if "Accumulative Production" in df_hist_disp.columns:
             try:
-                st.plotly_chart(bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+                acc_fig = bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}")
+                st.plotly_chart(acc_fig, use_container_width=True)
             except Exception as e:
                 st.warning(f"Acc cumulative chart error: {e}")
         else:
@@ -501,9 +531,10 @@ elif mode == "View Historical Data":
         except Exception:
             pass
 
-        # New: PDF Export in Historical mode
+        # New: PDF Export with Charts in Historical mode
         st.markdown("### Export Report")
-        generate_pdf_report(df_hist_disp, selected)
+        charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
+        generate_pdf_report(df_hist_disp, selected, charts)
 
 # ----------------------------
 # Manage Data
@@ -566,31 +597,33 @@ elif mode == "Analytics":
         else:
             totals = filtered_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
             totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
-            st.plotly_chart(px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date})"), use_container_width=True)
+            trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
+            st.plotly_chart(trend_fig, use_container_width=True)
             
             # Weekly and Monthly Analysis
             filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
             filtered_df['Month'] = filtered_df['Date'].dt.month
-            st.markdown("### Weekly Production")
-            st.plotly_chart(aggregated_bar_chart(filtered_df, "Production for the Day", "Week", theme_colors, "Weekly Production Totals"), use_container_width=True)
-            
-            st.markdown("### Monthly Production")
-            st.plotly_chart(aggregated_bar_chart(filtered_df, "Production for the Day", "Month", theme_colors, "Monthly Production Totals"), use_container_width=True)
+            weekly_fig = aggregated_bar_chart(filtered_df, "Production for the Day", "Week", theme_colors, "Weekly Production Totals")
+            monthly_fig = aggregated_bar_chart(filtered_df, "Production for the Day", "Month", theme_colors, "Monthly Production Totals")
+            st.plotly_chart(weekly_fig, use_container_width=True)
+            st.plotly_chart(monthly_fig, use_container_width=True)
             
             # Top plants over the range
             st.markdown("Top plants over the selected range")
             pivot = filtered_df.groupby(['Date','Plant'])['Production for the Day'].sum().reset_index()
             topplants = pivot.groupby('Plant')['Production for the Day'].sum().nlargest(5).index.tolist()
             if topplants:
-                st.plotly_chart(px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant'), use_container_width=True)
+                top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
+                st.plotly_chart(top_fig, use_container_width=True)
 
-            # New: PDF Export in Analytics mode
+            # New: PDF Export with Charts in Analytics mode
             st.markdown("### Export Report")
-            generate_pdf_report(filtered_df, f"{start_date} to {end_date}")
+            charts = {"Trend": trend_fig, "Weekly": weekly_fig, "Monthly": monthly_fig, "Top Plants": top_fig}
+            generate_pdf_report(filtered_df, f"{start_date} to {end_date}", charts)
 
 # ----------------------------
 # Sidebar help & closing
 # ----------------------------
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
-st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder.")
+st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder."
