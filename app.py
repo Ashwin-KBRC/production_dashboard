@@ -21,15 +21,11 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export with charts (using browser renderer)
+# For PDF export with charts (using uploaded images)
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
-import plotly.io as pio
 import psutil
-
-# Explicitly set Plotly renderer to browser (no external binaries)
-pio.renderers.default = "browser"
 
 # ----------------------------
 # Page config
@@ -197,7 +193,7 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ----------------------------
-# Plot helpers
+# Plot helpers (for display only, not PDF)
 # ----------------------------
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
@@ -283,8 +279,8 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Updated: PDF Report Generator with Charts (using browser renderer)
-def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
+# Updated: PDF Report Generator with Uploaded Chart Images
+def generate_pdf_report(df: pd.DataFrame, date_str: str, uploaded_charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
     doc = SimpleDocTemplate(str(buffer), pagesize=letter)
@@ -304,23 +300,25 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
     story.append(Spacer(1, 12))
     
-    # Add charts if provided
-    if charts:
-        for chart_type, fig in charts.items():
-            try:
-                # Explicitly use browser renderer for image export
-                img_data = fig.to_image(format="png", width=400, height=300, scale=2, engine="browser")
-                img_path = f"temp_{chart_type}.png"
-                with open(img_path, "wb") as f:
-                    f.write(img_data)
-                story.append(Image(img_path, width=400, height=300))
-                story.append(Spacer(1, 12))
-                # Clean up temporary file
-                os.remove(img_path)
-            except Exception as e:
-                st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
-                # Fallback: Add text note
-                story.append(Paragraph(f"{chart_type} Chart: Export failed. See app logs for details.", styles['Normal']))
+    # Add uploaded charts if provided
+    if uploaded_charts:
+        for chart_type, file in uploaded_charts.items():
+            if file is not None:
+                try:
+                    # Save uploaded image temporarily
+                    img_path = f"temp_{chart_type}.png"
+                    with open(img_path, "wb") as f:
+                        f.write(file.getvalue())
+                    story.append(Image(img_path, width=400, height=300))
+                    story.append(Spacer(1, 12))
+                    # Clean up temporary file
+                    os.remove(img_path)
+                except Exception as e:
+                    st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
+                    story.append(Paragraph(f"{chart_type} Chart: Upload failed or invalid format.", styles['Normal']))
+                    story.append(Spacer(1, 12))
+            else:
+                story.append(Paragraph(f"{chart_type} Chart: No image uploaded.", styles['Normal']))
                 story.append(Spacer(1, 12))
     
     doc.build(story)
@@ -363,6 +361,13 @@ if mode == "Upload New Data":
     st.header("Upload new daily production file")
     uploaded = st.file_uploader("Upload Excel (.xlsx) containing: Plant, Production for the Day, Accumulative Production", type=["xlsx"])
     selected_date = st.date_input("Which date is this file for?", value=datetime.today())
+
+    # Chart image uploaders
+    pie_upload = st.file_uploader("Upload Pie Chart (PNG)", type=["png"], key="pie_upload")
+    bar_upload = st.file_uploader("Upload Bar Chart (PNG)", type=["png"], key="bar_upload")
+    line_upload = st.file_uploader("Upload Line Chart (PNG)", type=["png"], key="line_upload")
+    area_upload = st.file_uploader("Upload Area Chart (PNG)", type=["png"], key="area_upload")
+    acc_upload = st.file_uploader("Upload Accumulative Chart (PNG)", type=["png"], key="acc_upload")
 
     if uploaded:
         try:
@@ -445,10 +450,10 @@ if mode == "Upload New Data":
                     except Exception:
                         pass
 
-                    # New: PDF Export with Charts in Upload mode
+                    # New: PDF Export with Uploaded Charts in Upload mode
                     st.markdown("### Export Report")
-                    charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"), charts)
+                    uploaded_charts = {"Pie": pie_upload, "Bar": bar_upload, "Line": line_upload, "Area": area_upload, "Accumulative": acc_upload}
+                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"), uploaded_charts)
 
 # ----------------------------
 # View Historical Data
@@ -535,10 +540,17 @@ elif mode == "View Historical Data":
         except Exception:
             pass
 
-        # New: PDF Export with Charts in Historical mode
+        # Chart image uploaders for Historical mode
+        pie_upload = st.file_uploader("Upload Pie Chart (PNG)", type=["png"], key="pie_upload_hist")
+        bar_upload = st.file_uploader("Upload Bar Chart (PNG)", type=["png"], key="bar_upload_hist")
+        line_upload = st.file_uploader("Upload Line Chart (PNG)", type=["png"], key="line_upload_hist")
+        area_upload = st.file_uploader("Upload Area Chart (PNG)", type=["png"], key="area_upload_hist")
+        acc_upload = st.file_uploader("Upload Accumulative Chart (PNG)", type=["png"], key="acc_upload_hist")
+
+        # New: PDF Export with Uploaded Charts in Historical mode
         st.markdown("### Export Report")
-        charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-        generate_pdf_report(df_hist_disp, selected, charts)
+        uploaded_charts = {"Pie": pie_upload, "Bar": bar_upload, "Line": line_upload, "Area": area_upload, "Accumulative": acc_upload}
+        generate_pdf_report(df_hist_disp, selected, uploaded_charts)
 
 # ----------------------------
 # Manage Data
@@ -620,10 +632,16 @@ elif mode == "Analytics":
                 top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
                 st.plotly_chart(top_fig, use_container_width=True)
 
-            # New: PDF Export with Charts in Analytics mode
-            st.markdown("### Export Report")
-            charts = {"Trend": trend_fig, "Weekly": weekly_fig, "Monthly": monthly_fig, "Top Plants": top_fig}
-            generate_pdf_report(filtered_df, f"{start_date} to {end_date}", charts)
+        # Chart image uploaders for Analytics mode
+        trend_upload = st.file_uploader("Upload Trend Chart (PNG)", type=["png"], key="trend_upload")
+        weekly_upload = st.file_uploader("Upload Weekly Chart (PNG)", type=["png"], key="weekly_upload")
+        monthly_upload = st.file_uploader("Upload Monthly Chart (PNG)", type=["png"], key="monthly_upload")
+        top_upload = st.file_uploader("Upload Top Plants Chart (PNG)", type=["png"], key="top_upload")
+
+        # New: PDF Export with Uploaded Charts in Analytics mode
+        st.markdown("### Export Report")
+        uploaded_charts = {"Trend": trend_upload, "Weekly": weekly_upload, "Monthly": monthly_upload, "Top Plants": top_upload}
+        generate_pdf_report(filtered_df, f"{start_date} to {end_date}", uploaded_charts)
 
 # ----------------------------
 # Sidebar help & closing
@@ -631,3 +649,4 @@ elif mode == "Analytics":
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
 st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder.")
+st.sidebar.write("To include charts in PDFs, generate them locally using Plotly (e.g., save as PNG) and upload via the file uploaders.")
