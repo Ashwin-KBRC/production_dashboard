@@ -72,17 +72,17 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ----------------------------
-# Color themes
+# Color themes (updated for professional look)
 # ----------------------------
 COLOR_THEMES = {
-    "Classic": px.colors.qualitative.Bold,
-    "Blue": px.colors.sequential.Blues,
-    "Vibrant": ["#EF476F", "#FFD166", "#06D6A0", "#118AB2", "#073B4C"],
-    "Forest": ["#2e8b57", "#3cb371", "#66cdaa", "#20b2aa", "#2f4f4f"],
+    "Corporate": px.colors.qualitative.Plotly,  # Professional palette
+    "Blue": ["#1F77B4", "#2CA02C", "#FF7F0E", "#9467BD", "#D62728"],
+    "Vibrant": ["#003087", "#00A1D6", "#7AC143", "#FDB813", "#E4002B"],
+    "Forest": ["#2E7D32", "#388E3C", "#43A047", "#4CAF50", "#66BB6A"],
 }
 
 if "theme" not in st.session_state:
-    st.session_state["theme"] = "Classic"
+    st.session_state["theme"] = "Corporate"
 
 # ----------------------------
 # Helper: hashing and auth
@@ -193,36 +193,83 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ----------------------------
-# Plot helpers (for display only)
+# Plot helpers (enhanced for professional look)
 # ----------------------------
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
-    fig.update_traces(textinfo="percent+label")
-    fig.update_layout(title_x=0.5)
+    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, weight=600))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight=700), x=0.5),
+        legend=dict(font=dict(size=12, weight=600)),
+        margin=dict(t=50, b=20, l=20, r=20),
+        showlegend=True
+    )
     return fig
 
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
-    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside")
-    fig.update_layout(xaxis_tickangle=-45, title_x=0.5)
+    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=12, weight=600))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight=700), x=0.5),
+        xaxis=dict(title="Plant", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600), tickangle=-45),
+        yaxis=dict(title=value_col, titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        legend=dict(font=dict(size=12, weight=600)),
+        margin=dict(t=50, b=50, l=50, r=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
     return fig
 
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
-    fig.update_layout(title_x=0.5)
+    fig.update_traces(marker=dict(size=8), line=dict(width=2))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight=700), x=0.5),
+        xaxis=dict(title="Plant", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        yaxis=dict(title=value_col, titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        legend=dict(font=dict(size=12, weight=600)),
+        margin=dict(t=50, b=20, l=50, r=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
     return fig
 
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-    fig.update_layout(title_x=0.5)
+    fig.update_traces(line=dict(width=2))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight=700), x=0.5),
+        xaxis=dict(title="Plant", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        yaxis=dict(title=value_col, titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        legend=dict(font=dict(size=12, weight=600)),
+        margin=dict(t=50, b=20, l=50, r=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
     return fig
 
 # New: Weekly/Monthly bar chart helper
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     agg_df = df.groupby(group_col)[value_col].sum().reset_index().sort_values(value_col, ascending=False)
     fig = px.bar(agg_df, x=group_col, y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
-    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside")
-    fig.update_layout(xaxis_tickangle=-45, title_x=0.5)
+    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=12, weight=600))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight=700), x=0.5),
+        xaxis=dict(title=group_col, titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600), tickangle=-45),
+        yaxis=dict(title=value_col, titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+        legend=dict(font=dict(size=12, weight=600)),
+        margin=dict(t=50, b=50, l=50, r=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
     return fig
 
 # ----------------------------
@@ -323,7 +370,7 @@ if st.sidebar.button("Logout"):
     logout()
 
 mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Classic")))
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Corporate")))
 st.session_state["theme"] = theme_choice
 theme_colors = COLOR_THEMES[theme_choice]
 
@@ -397,14 +444,14 @@ if mode == "Upload New Data":
                     st.markdown("### Charts")
                     c1, c2 = st.columns(2)
                     with c1:
-                        pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production share (Pie)")
+                        pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production Share")
                         st.plotly_chart(pie_fig, use_container_width=True)
                     with c2:
-                        bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant (Bar)")
+                        bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant")
                         st.plotly_chart(bar_fig, use_container_width=True)
                     try:
-                        line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production trend (Line)")
-                        area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production flow (Area)")
+                        line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production Trend")
+                        area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production Flow")
                         st.plotly_chart(line_fig, use_container_width=True)
                         st.plotly_chart(area_fig, use_container_width=True)
                     except Exception as e:
@@ -462,14 +509,14 @@ elif mode == "View Historical Data":
         st.markdown("### Charts")
         c1, c2 = st.columns(2)
         with c1:
-            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production share — {selected}")
+            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Share — {selected}")
             st.plotly_chart(pie_fig, use_container_width=True)
         with c2:
             bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
             st.plotly_chart(bar_fig, use_container_width=True)
         try:
-            line_fig = line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production trend — {selected}")
-            area_fig = area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production flow — {selected}")
+            line_fig = line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Trend — {selected}")
+            area_fig = area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Flow — {selected}")
             st.plotly_chart(line_fig, use_container_width=True)
             st.plotly_chart(area_fig, use_container_width=True)
         except Exception as e:
@@ -477,7 +524,7 @@ elif mode == "View Historical Data":
 
         if "Accumulative Production" in df_hist_disp.columns:
             try:
-                acc_fig = bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}")
+                acc_fig = bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Production — {selected}")
                 st.plotly_chart(acc_fig, use_container_width=True)
             except Exception as e:
                 st.warning(f"Acc cumulative chart error: {e}")
@@ -577,6 +624,18 @@ elif mode == "Analytics":
             totals = filtered_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
             totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
             trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
+            trend_fig.update_traces(marker=dict(size=8), line=dict(width=2))
+            trend_fig.update_layout(
+                title=dict(text=f"Production Trend ({start_date} to {end_date})", font=dict(size=16, weight=700), x=0.5),
+                xaxis=dict(title="Date", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+                yaxis=dict(title="m³", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+                legend=dict(font=dict(size=12, weight=600)),
+                margin=dict(t=50, b=20, l=50, r=20),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                xaxis_gridcolor="#E0E0E0",
+                yaxis_gridcolor="#E0E0E0"
+            )
             st.plotly_chart(trend_fig, use_container_width=True)
             
             # Weekly and Monthly Analysis
@@ -593,6 +652,18 @@ elif mode == "Analytics":
             topplants = pivot.groupby('Plant')['Production for the Day'].sum().nlargest(5).index.tolist()
             if topplants:
                 top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
+                top_fig.update_traces(marker=dict(size=8), line=dict(width=2))
+                top_fig.update_layout(
+                    title=dict(text="Top Plants Production", font=dict(size=16, weight=700), x=0.5),
+                    xaxis=dict(title="Date", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+                    yaxis=dict(title="m³", titlefont=dict(size=14, weight=600), tickfont=dict(size=12, weight=600)),
+                    legend=dict(font=dict(size=12, weight=600)),
+                    margin=dict(t=50, b=20, l=50, r=20),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis_gridcolor="#E0E0E0",
+                    yaxis_gridcolor="#E0E0E0"
+                )
                 st.plotly_chart(top_fig, use_container_width=True)
 
         # New: PDF Export with Data in Analytics mode
