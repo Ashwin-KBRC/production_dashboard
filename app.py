@@ -548,7 +548,7 @@ elif mode == "Analytics":
     if len(saved) < 2:
         st.info("Upload at least two days to see multi-day analytics.")
     else:
-        # New: Custom date range filter
+        # Custom date range filter
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
@@ -568,7 +568,7 @@ elif mode == "Analytics":
             totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
             st.plotly_chart(px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date})"), use_container_width=True)
             
-            # New: Weekly and Monthly Analysis
+            # Weekly and Monthly Analysis
             filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
             filtered_df['Month'] = filtered_df['Date'].dt.month
             st.markdown("### Weekly Production")
