@@ -21,22 +21,10 @@ import numpy as np
 import plotly.express as px
 import streamlit as st
 
-# For PDF export with charts
+# For PDF export (text-only)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
-import plotly.io as pio
-import psutil  # For Orca process management attempt
-
-# Attempt to set Orca renderer, fall back if unavailable
-try:
-    pio.renderers.default = "orca"
-    st.write("Orca renderer initialized successfully.")
-except ValueError:
-    st.warning("Orca renderer unavailable. Charts will be excluded from PDFs.")
-    orca_available = False
-else:
-    orca_available = True
 
 # ----------------------------
 # Page config
@@ -290,7 +278,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Updated: PDF Report Generator with Charts (with Orca fallback)
+# Updated: PDF Report Generator (text-only)
 def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     filename = f"production_report_{date_str}.pdf"
     buffer = Path(filename)
@@ -310,30 +298,6 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str, charts=None):
     total = df["Production for the Day"].sum()
     story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
     story.append(Spacer(1, 12))
-    
-    # Add charts if provided and Orca is available
-    if charts and orca_available:
-        for chart_type, fig in charts.items():
-            try:
-                # Export chart as PNG using Orca
-                img_data = fig.to_image(format="png", width=400, height=300, scale=2, engine="orca")
-                img_path = f"temp_{chart_type}.png"
-                with open(img_path, "wb") as f:
-                    f.write(img_data)
-                story.append(Image(img_path, width=400, height=300))
-                story.append(Spacer(1, 12))
-                # Clean up temporary file
-                os.remove(img_path)
-            except Exception as e:
-                st.warning(f"Failed to add {chart_type} chart to PDF: {e}")
-                # Fallback: Add text note
-                story.append(Paragraph(f"{chart_type} Chart: Export failed.", styles['Normal']))
-                story.append(Spacer(1, 12))
-    elif charts and not orca_available:
-        st.warning("Charts excluded from PDF due to missing Orca renderer.")
-        for chart_type in charts.keys():
-            story.append(Paragraph(f"{chart_type} Chart: Not available.", styles['Normal']))
-            story.append(Spacer(1, 12))
     
     doc.build(story)
     with open(buffer, "rb") as f:
@@ -459,8 +423,7 @@ if mode == "Upload New Data":
 
                     # New: PDF Export with Charts in Upload mode
                     st.markdown("### Export Report")
-                    charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"), charts)
+                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"))
 
 # ----------------------------
 # View Historical Data
@@ -549,8 +512,7 @@ elif mode == "View Historical Data":
 
         # New: PDF Export with Charts in Historical mode
         st.markdown("### Export Report")
-        charts = {"Pie": pie_fig, "Bar": bar_fig, "Line": line_fig, "Area": area_fig, "Accumulative": acc_fig}
-        generate_pdf_report(df_hist_disp, selected, charts)
+        generate_pdf_report(df_hist_disp, selected)
 
 # ----------------------------
 # Manage Data
@@ -634,8 +596,7 @@ elif mode == "Analytics":
 
             # New: PDF Export with Charts in Analytics mode
             st.markdown("### Export Report")
-            charts = {"Trend": trend_fig, "Weekly": weekly_fig, "Monthly": monthly_fig, "Top Plants": top_fig}
-            generate_pdf_report(filtered_df, f"{start_date} to {end_date}", charts)
+            generate_pdf_report(filtered_df, f"{start_date} to {end_date}")
 
 # ----------------------------
 # Sidebar help & closing
