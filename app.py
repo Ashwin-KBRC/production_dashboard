@@ -1,9 +1,10 @@
 """
 Production Dashboard - Full long version (fixed rerun)
-- Secure login (hashed users or set via Streamlit Secrets)
+- Secure login (hashed default user, fallback to Streamlit Secrets if available)
 - Upload Excel, choose date, confirm, save to data/YYYY-MM-DD.csv
 - Attempt automatic push to GitHub via REST API
 - Historical viewer, rename/delete, charts, themes, alerts, AI-style summary
+- New: Custom date range filters, PDF export, weekly/monthly charts in Analytics
 - Uses st.rerun() (not deprecated experimental_rerun)
 """
 
@@ -19,6 +20,11 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import streamlit as st
+
+# For PDF export
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.lib.styles import getSampleStyleSheet
 
 # ----------------------------
 # Page config
@@ -210,6 +216,14 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig.update_layout(title_x=0.5)
     return fig
 
+# New: Weekly/Monthly bar chart helper
+def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    agg_df = df.groupby(group_col)[value_col].sum().reset_index().sort_values(value_col, ascending=False)
+    fig = px.bar(agg_df, x=group_col, y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
+    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside")
+    fig.update_layout(xaxis_tickangle=-45, title_x=0.5)
+    return fig
+
 # ----------------------------
 # Analytics helpers
 # ----------------------------
@@ -263,6 +277,29 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
         return "  \n".join(lines)
     except Exception as e:
         return f"Summary unavailable: {e}"
+
+# New: PDF Report Generator
+def generate_pdf_report(df: pd.DataFrame, date_str: str):
+    filename = f"production_report_{date_str}.pdf"
+    buffer = Path(filename)
+    doc = SimpleDocTemplate(str(buffer), pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(f"Production Report - {date_str}", styles['Title']))
+    story.append(Spacer(1, 12))
+    
+    # Add table of data
+    data = [df.columns.tolist()] + df.values.tolist()
+    table = Table(data)
+    story.append(table)
+    
+    # Add summary text
+    total = df["Production for the Day"].sum()
+    story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
+    
+    doc.build(story)
+    with open(buffer, "rb") as f:
+        st.download_button("Download PDF Report", f.read(), file_name=filename, mime="application/pdf")
 
 # ----------------------------
 # UI: Login handling
@@ -383,6 +420,10 @@ if mode == "Upload New Data":
                     except Exception:
                         pass
 
+                    # New: PDF Export in Upload mode
+                    st.markdown("### Export Report")
+                    generate_pdf_report(df_display, selected_date.strftime("%Y-%m-%d"))
+
 # ----------------------------
 # View Historical Data
 # ----------------------------
@@ -460,6 +501,10 @@ elif mode == "View Historical Data":
         except Exception:
             pass
 
+        # New: PDF Export in Historical mode
+        st.markdown("### Export Report")
+        generate_pdf_report(df_hist_disp, selected)
+
 # ----------------------------
 # Manage Data
 # ----------------------------
@@ -503,18 +548,45 @@ elif mode == "Analytics":
     if len(saved) < 2:
         st.info("Upload at least two days to see multi-day analytics.")
     else:
+        # New: Custom date range filter
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
+        with col2:
+            end_date = st.date_input("End Date", value=datetime.today())
+        
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-        totals = all_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
-        totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
-        st.plotly_chart(px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}), use_container_width=True)
-        st.markdown("Top plants over the last 30 days")
-        last30 = all_df[all_df['Date'] >= (totals['Date'].max() - pd.Timedelta(days=29))]
-        pivot = last30.groupby(['Date','Plant'])['Production for the Day'].sum().reset_index()
-        topplants = pivot.groupby('Plant')['Production for the Day'].sum().nlargest(5).index.tolist()
-        if topplants:
-            st.plotly_chart(px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant'), use_container_width=True)
+        
+        # Filter data
+        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+        if filtered_df.empty:
+            st.warning("No data in selected range.")
+        else:
+            totals = filtered_df.groupby('Date')['Production for the Day'].sum().reset_index().sort_values('Date')
+            totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
+            st.plotly_chart(px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date})"), use_container_width=True)
+            
+            # New: Weekly and Monthly Analysis
+            filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
+            filtered_df['Month'] = filtered_df['Date'].dt.month
+            st.markdown("### Weekly Production")
+            st.plotly_chart(aggregated_bar_chart(filtered_df, "Production for the Day", "Week", theme_colors, "Weekly Production Totals"), use_container_width=True)
+            
+            st.markdown("### Monthly Production")
+            st.plotly_chart(aggregated_bar_chart(filtered_df, "Production for the Day", "Month", theme_colors, "Monthly Production Totals"), use_container_width=True)
+            
+            # Top plants over the range
+            st.markdown("Top plants over the selected range")
+            pivot = filtered_df.groupby(['Date','Plant'])['Production for the Day'].sum().reset_index()
+            topplants = pivot.groupby('Plant')['Production for the Day'].sum().nlargest(5).index.tolist()
+            if topplants:
+                st.plotly_chart(px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant'), use_container_width=True)
+
+            # New: PDF Export in Analytics mode
+            st.markdown("### Export Report")
+            generate_pdf_report(filtered_df, f"{start_date} to {end_date}")
 
 # ----------------------------
 # Sidebar help & closing
