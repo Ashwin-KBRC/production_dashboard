@@ -626,4 +626,4 @@ elif mode == "Analytics":
 # ----------------------------
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
-st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder."
+st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder.")
