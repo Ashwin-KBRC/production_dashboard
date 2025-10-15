@@ -199,115 +199,93 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
-    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, weight=600, color="black"))
-    fig.update_layout(
-        title_text=title,
-        title_font=dict(family="Arial", size=18, weight=700, color="black"),
-        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=60, b=40, l=40, r=40),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        showlegend=True
-    )
+    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
+    fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
+    fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_layout(margin=dict(t=60, b=40, l=40, r=40), plot_bgcolor="white", paper_bgcolor="white", showlegend=True)
     return fig
 
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
-    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
-    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, weight=600, color="black"))
-    fig.update_layout(
-        title_text=title,
-        title_font=dict(family="Arial", size=18, weight=700, color="black"),
-        xaxis_title="Plant",
-        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        yaxis_title=value_col,
-        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=60, b=80, l=60, r=40),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
+    try:
+        fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
+        fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+        fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
+    except Exception as e:
+        st.warning(f"Error in bar_chart: {str(e)}")
+        fig = px.bar(df, x="Plant", y=value_col, title=title)  # Fallback basic chart
     return fig
 
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
-    fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
-    fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
-    fig.update_layout(
-        title_text=title,
-        title_font=dict(family="Arial", size=18, weight=700, color="black"),
-        xaxis_title="Plant",
-        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        yaxis_title=value_col,
-        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=60, b=40, l=60, r=40),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
+    try:
+        fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
+        fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
+        fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+        fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
+    except Exception as e:
+        st.warning(f"Error in line_chart: {str(e)}")
+        fig = px.line(df, x="Plant", y=value_col, title=title)  # Fallback basic chart
     return fig
 
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
-    fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-    fig.update_traces(line=dict(width=2), opacity=0.8)
-    fig.update_layout(
-        title_text=title,
-        title_font=dict(family="Arial", size=18, weight=700, color="black"),
-        xaxis_title="Plant",
-        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        yaxis_title=value_col,
-        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=60, b=40, l=60, r=40),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
+    try:
+        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
+        fig.update_traces(line=dict(width=2), opacity=0.8)
+        fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
+        fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+        fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
+    except Exception as e:
+        st.warning(f"Error in area_chart: {str(e)}")
+        fig = px.area(df, x="Plant", y=value_col, title=title)  # Fallback basic chart
     return fig
 
 # New: Weekly/Monthly bar chart helper
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     if value_col not in df.columns or group_col not in df.columns:
         raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
-    agg_df = df.groupby(group_col)[value_col].sum().reset_index().sort_values(value_col, ascending=False)
-    fig = px.bar(agg_df, x=group_col, y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
-    fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, weight=600, color="black"))
-    fig.update_layout(
-        title_text=title,
-        title_font=dict(family="Arial", size=18, weight=700, color="black"),
-        xaxis_title=group_col,
-        xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        yaxis_title=value_col,
-        yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-        yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-        legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=60, b=80, l=60, r=40),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
+    try:
+        agg_df = df.groupby(group_col)[value_col].sum().reset_index().sort_values(value_col, ascending=False)
+        fig = px.bar(agg_df, x=group_col, y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
+        fig.update_layout(xaxis_title=group_col, xaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+        fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
+    except Exception as e:
+        st.warning(f"Error in aggregated_bar_chart: {str(e)}")
+        fig = px.bar(agg_df, x=group_col, y=value_col, title=title)  # Fallback basic chart
     return fig
 
 # ----------------------------
@@ -663,23 +641,15 @@ elif mode == "Analytics":
             totals['7d_ma'] = totals['Production for the Day'].rolling(7, min_periods=1).mean()
             trend_fig = px.line(totals, x='Date', y=['Production for the Day','7d_ma'], labels={'value':'m³','variable':'Metric'}, title=f"Production Trend ({start_date} to {end_date}")
             trend_fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
-            trend_fig.update_layout(
-                title_text=f"Production Trend ({start_date} to {end_date})",
-                title_font=dict(family="Arial", size=18, weight=700, color="black"),
-                xaxis_title="Date",
-                xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-                xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-                yaxis_title="m³",
-                yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-                yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-                legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=60, b=40, l=60, r=40),
-                plot_bgcolor="white",
-                paper_bgcolor="white",
-                xaxis_gridcolor="#E0E0E0",
-                yaxis_gridcolor="#E0E0E0"
-            )
+            trend_fig.update_layout(title_text=f"Production Trend ({start_date} to {end_date})", title_font=dict(family="Arial", size=18, color="black"))
+            trend_fig.update_layout(xaxis_title="Date", xaxis_title_font=dict(family="Arial", size=14, color="black"))
+            trend_fig.update_layout(yaxis_title="m³", yaxis_title_font=dict(family="Arial", size=14, color="black"))
+            trend_fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+            trend_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            trend_fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+            trend_fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+            trend_fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+            trend_fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
             st.plotly_chart(trend_fig, use_container_width=True)
             
             # Weekly and Monthly Analysis
@@ -697,23 +667,15 @@ elif mode == "Analytics":
             if topplants:
                 top_fig = px.line(pivot[pivot['Plant'].isin(topplants)], x='Date', y='Production for the Day', color='Plant')
                 top_fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
-                top_fig.update_layout(
-                    title_text="Top Plants Production",
-                    title_font=dict(family="Arial", size=18, weight=700, color="black"),
-                    xaxis_title="Date",
-                    xaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-                    xaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-                    yaxis_title="m³",
-                    yaxis_title_font=dict(family="Arial", size=14, weight=600, color="black"),
-                    yaxis_tickfont=dict(family="Arial", size=12, weight=600, color="black"),
-                    legend_font=dict(family="Arial", size=14, weight=600, color="black"),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    margin=dict(t=60, b=40, l=60, r=40),
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
-                    xaxis_gridcolor="#E0E0E0",
-                    yaxis_gridcolor="#E0E0E0"
-                )
+                top_fig.update_layout(title_text="Top Plants Production", title_font=dict(family="Arial", size=18, color="black"))
+                top_fig.update_layout(xaxis_title="Date", xaxis_title_font=dict(family="Arial", size=14, color="black"))
+                top_fig.update_layout(yaxis_title="m³", yaxis_title_font=dict(family="Arial", size=14, color="black"))
+                top_fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+                top_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                top_fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+                top_fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+                top_fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+                top_fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
                 st.plotly_chart(top_fig, use_container_width=True)
 
         # New: PDF Export with Data in Analytics mode
