@@ -226,7 +226,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     if value_col not in df.columns or group_col not in df.columns:
         raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
     try:
-        agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values([group_col, "Plant"], ascending=True)
+        agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
         fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
