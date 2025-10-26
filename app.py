@@ -51,15 +51,15 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
     for k, v in SECRETS["USERS"].items():
         USERS[k] = v
 
-# Color themes
+# New Color Themes
 COLOR_THEMES = {
-    "Corporate": px.colors.qualitative.Plotly,
-    "Blue": ["#1F77B4", "#2CA02C", "#FF7F0E", "#9467BD", "#D62728"],
-    "Vibrant": ["#003087", "#00A1D6", "#7AC143", "#FDB813", "#E4002B"],
-    "Forest": ["#2E7D32", "#388E3C", "#43A047", "#4CAF50", "#66BB6A"],
+    "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
+    "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
+    "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
+    "Golden Horizon": ["#D4A017", "#A67B5B", "#8A5A44", "#6B4E31", "#4A3627"],
 }
 if "theme" not in st.session_state:
-    st.session_state["theme"] = "Corporate"
+    st.session_state["theme"] = "Modern Slate"
 
 # Helper: hashing and auth
 def hash_password(password: str) -> str:
@@ -289,7 +289,7 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
     except Exception as e:
         return f"Summary unavailable: {e}"
 
-# Excel Report Generator (replaces PDF)
+# Excel Report Generator
 def generate_excel_report(df: pd.DataFrame, date_str: str):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -331,7 +331,7 @@ st.sidebar.write(f"Logged in as: **{st.session_state.get('username','-')}**")
 if st.sidebar.button("Logout"):
     logout()
 mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Corporate")))
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Modern Slate")))
 st.session_state["theme"] = theme_choice
 theme_colors = COLOR_THEMES[theme_choice]
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=10.0)
