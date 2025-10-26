@@ -193,8 +193,8 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
-        fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
-        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
+        fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=value_col)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3), textposition="top center", textfont=dict(size=12, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -213,8 +213,8 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
-        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-        fig.update_traces(line=dict(width=2), opacity=0.8)
+        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
+        fig.update_traces(line=dict(width=2), opacity=0.8, textposition="top center", textfont=dict(size=12, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -567,7 +567,7 @@ elif mode == "Analytics":
         with col1:
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
-            end_date = st.date_input("End Date", value=datetime.today())  
+            end_date = st.date_input("End Date", value=datetime.today())
         
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
@@ -617,4 +617,3 @@ elif mode == "Analytics":
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
 st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder via GitHub UI.")
-
