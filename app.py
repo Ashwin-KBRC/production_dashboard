@@ -56,8 +56,8 @@ COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
-    "Corporate": ["#2C3E50", "#3498DB", "#E74C3C", "#2ECC71", "#F1C40F"],
-    "Midnight Sky": ["#1A237E", "#3949AB", "#5E35B1", "#8E24AA", "#AB47BC"],
+    "Corporate": ["#2C3E50", "#3498DB", "#E74C3C", "#2ECC71", "#F39C12"],
+    "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8"],
     "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684"],
 }
 if "theme" not in st.session_state:
@@ -161,7 +161,7 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
     fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
     fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
-    fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+    fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
     fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     fig.update_layout(margin=dict(t=60, b=40, l=40, r=40), plot_bgcolor="white", paper_bgcolor="white", showlegend=True)
     return fig
@@ -174,7 +174,7 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
-        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
         fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
@@ -193,7 +193,7 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
-        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
         fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
@@ -212,7 +212,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
-        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig.update_layout(margin=dict(t=60, b=40, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
         fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
@@ -232,7 +232,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
-        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black"))
+        fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
         fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
