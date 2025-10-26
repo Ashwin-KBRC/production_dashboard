@@ -194,7 +194,7 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
         fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=value_col)
-        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3), textposition="top center", textfont=dict(size=12, color="black"))
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3), textposition="top center", texttemplate="%{text:.2f}", textfont=dict(size=10, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -214,7 +214,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
         fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
-        fig.update_traces(line=dict(width=2), opacity=0.8, textposition="top center", textfont=dict(size=12, color="black"))
+        fig.update_traces(line=dict(width=2), opacity=0.8, textposition="top center", texttemplate="%{text:.2f}", textfont=dict(size=10, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -234,7 +234,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
     try:
         agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
-        # Create a color map for unique group_col values
+        # Create a color map for unique group_col values using the provided theme colors
         unique_groups = agg_df[group_col].unique()
         color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=value_col)
