@@ -60,6 +60,8 @@ COLOR_THEMES = {
 }
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
+elif st.session_state["theme"] not in COLOR_THEMES:
+    st.session_state["theme"] = "Modern Slate"  # Reset to default if invalid
 
 # Helper: hashing and auth
 def hash_password(password: str) -> str:
@@ -331,8 +333,7 @@ st.sidebar.write(f"Logged in as: **{st.session_state.get('username','-')}**")
 if st.sidebar.button("Logout"):
     logout()
 mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state.get("theme","Modern Slate")))
-st.session_state["theme"] = theme_choice
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
 theme_colors = COLOR_THEMES[theme_choice]
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=10.0)
 st.sidebar.markdown("---")
