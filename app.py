@@ -567,7 +567,7 @@ elif mode == "Analytics":
         with col1:
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
-            end_date = st.date_input("End Date", value=datetime.today")
+            end_date = st.date_input("End Date", value=datetime.today())  
         
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
@@ -617,3 +617,4 @@ elif mode == "Analytics":
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
 st.sidebar.write("Or manually download CSV from the app container and upload to your repo's data/ folder via GitHub UI.")
+
