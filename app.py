@@ -56,9 +56,12 @@ COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
-    "Corporate": ["#2C3E50", "#3498DB", "#E74C3C", "#2ECC71", "#F39C12"],
+    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40"],  # Red, Blue, Green, Orange, Yellow
     "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8"],
     "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684"],
+    "Sunny Fields": ["#FFD700", "#98FB98", "#87CEEB", "#FFA500", "#FF69B4"],  # Gold, Light Green, Light Sky Blue, Orange, Hot Pink
+    "Crystal Glow": ["#00CED1", "#BA55D3", "#FFDAB9", "#ADFF2F", "#FF4500"],  # Dark Turquoise, Medium Orchid, Peach Puff, Green-Yellow, Orange-Red
+    "Emerald Dawn": ["#00FF7F", "#4169E1", "#FF1493", "#FFD700", "#20B2AA"],  # Spring Green, Royal Blue, Deep Pink, Gold, Light Sea Green
 }
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
@@ -158,19 +161,20 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
-    fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
-    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
+    fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title, text=value_col)
+    fig.update_traces(textinfo="percent+label+value", textposition="inside", textfont=dict(size=12, color="black"))
     fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
     fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
     fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     fig.update_layout(margin=dict(t=60, b=40, l=40, r=40), plot_bgcolor="white", paper_bgcolor="white", showlegend=True)
     return fig
+
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
         fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="auto", textfont=dict(size=14, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -184,12 +188,13 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in bar_chart: {str(e)}")
         fig = px.bar(df, x="Plant", y=value_col, title=title)
     return fig
+
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
-        fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors)
-        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3))
+        fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=value_col)
+        fig.update_traces(marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")), line=dict(width=3), textposition="top center", textfont=dict(size=12, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -203,12 +208,13 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in line_chart: {str(e)}")
         fig = px.line(df, x="Plant", y=value_col, title=title)
     return fig
+
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
-        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-        fig.update_traces(line=dict(width=2), opacity=0.8)
+        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
+        fig.update_traces(line=dict(width=2), opacity=0.8, textposition="top center", textfont=dict(size=12, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -222,14 +228,14 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in area_chart: {str(e)}")
         fig = px.area(df, x="Plant", y=value_col, title=title)
     return fig
+
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     if value_col not in df.columns or group_col not in df.columns:
         raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
     try:
         agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_sequence=colors, title=title, text=value_col)
-        fig.update_traces(marker_color=colors, selector=dict(type='bar'))  # Explicitly apply theme colors to bars
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_traces(marker_color=colors, texttemplate="%{text:.2s}", textposition="auto", textfont=dict(size=14, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
