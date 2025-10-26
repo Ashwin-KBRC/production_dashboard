@@ -51,12 +51,14 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
     for k, v in SECRETS["USERS"].items():
         USERS[k] = v
 
-# New Color Themes
+# Updated Color Themes
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
-    "Golden Horizon": ["#D4A017", "#A67B5B", "#8A5A44", "#6B4E31", "#4A3627"],
+    "Corporate": ["#2C3E50", "#3498DB", "#E74C3C", "#2ECC71", "#F1C40F"],
+    "Midnight Sky": ["#1A237E", "#3949AB", "#5E35B1", "#8E24AA", "#AB47BC"],
+    "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684"],
 }
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
