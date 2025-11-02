@@ -23,6 +23,7 @@ st.markdown("""
     }
     .stButton > button:hover { background-color: #7D9D9C; }
     .stSelectbox > div > div { background-color: #f0f2f6; border-radius: 8px; }
+    .stDateInput > div > div { background-color: #f9f9f9; border-radius: 8px; }
     .stExpander { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 1rem; }
 </style>
 """, unsafe_allow_html=True)
@@ -102,25 +103,33 @@ def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False)
     df.to_csv(p, index=False)
     return p
 
-def list_saved_dates() -> List[str]:
-    return sorted([p.stem for p in DATA_DIR.glob("*.csv")], reverse=True)
+def list_saved_dates()-launch -> List[datetime.date]:
+    dates = []
+    for p in DATA_DIR.glob("*.csv"):
+        try:
+            date_str = p.stem
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            dates.append(date_obj)
+        except:
+            continue
+    return sorted(dates, reverse=True)
 
-def load_saved(date_str: str) -> pd.DataFrame:
-    p = DATA_DIR / f"{date_str}.csv"
+def load_saved(date_obj: datetime.date) -> pd.DataFrame:
+    p = DATA_DIR / f"{date_obj:%Y-%m-%d}.csv"
     if not p.exists():
-        raise FileNotFoundError(f"No data for {date_str}")
+        raise FileNotFoundError(f"No data for {date_obj}")
     return pd.read_csv(p)
 
-def rename_saved(old: str, new: str) -> bool:
-    old_p = DATA_DIR / f"{old}.csv"
-    new_p = DATA_DIR / f"{new}.csv"
+def rename_saved(old: datetime.date, new: datetime.date) -> bool:
+    old_p = DATA_DIR / f"{old:%Y-%m-%d}.csv"
+    new_p = DATA_DIR / f"{new:%Y-%m-%d}.csv"
     if old_p.exists():
         old_p.rename(new_p)
         return True
     return False
 
-def delete_saved(date_str: str) -> bool:
-    p = DATA_DIR / f"{date_str}.csv"
+def delete_saved(date_obj: datetime.date) -> bool:
+    p = DATA_DIR / f"{date_obj:%Y-%m-%d}.csv"
     if p.exists():
         p.unlink()
         return True
@@ -212,27 +221,11 @@ st.sidebar.caption("Upload Excel: **Plant**, **Production for the Day**, **Accum
 
 st.title("PRODUCTION DASHBOARD")
 
-# === Unified Date Range Selector ===
-def date_range_selector(key_prefix: str):
-    with st.expander("Date Range Filter", expanded=True):
-        c1, c2, c3 = st.columns([3, 3, 1])
-        with c1:
-            start = st.date_input("Start Date", value=datetime.today() - timedelta(days=30), key=f"{key_prefix}_start")
-        with c2:
-            end = st.date_input("End Date", value=datetime.today(), key=f"{key_prefix}_end")
-        with c3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            apply = st.button("Apply", key=f"{key_prefix}_apply", use_container_width=True)
-    if start > end:
-        st.error("Start date cannot be after end date.")
-        st.stop()
-    return start, end
-
 # === UPLOAD NEW DATA ===
 if mode == "Upload New Data":
     st.header("Upload Daily Production")
     uploaded = st.file_uploader("Choose Excel file (.xlsx)", type=["xlsx"])
-    selected_date = st.date_input("Date for this data", value=datetime.today())
+    selected_date = st.date_input("Date for this data", value=datetime.today(), help="Select the production date")
 
     if uploaded:
         try:
@@ -287,40 +280,45 @@ if mode == "Upload New Data":
                 excel = generate_excel_report(df_disp, selected_date.strftime("%Y-%m-%d"))
                 st.download_button("Download Excel", excel, f"report_{selected_date:%Y-%m-%d}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# === VIEW HISTORICAL DATA ===
+# === VIEW HISTORICAL DATA (Same style as Upload) ===
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
-    dates = list_saved_dates()
-    if not dates:
-        st.info("No data.")
+    available_dates = list_saved_dates()
+    if not available_dates:
+        st.info("No saved data yet.")
     else:
-        start, end = date_range_selector("hist")
-        valid_dates = [d for d in dates if start <= datetime.strptime(d, "%Y-%m-%d").date() <= end]
-        if not valid_dates:
-            st.warning("No data in range.")
-        else:
-            selected = st.selectbox(
-                "Select date",
-                valid_dates,
-                format_func=lambda x: datetime.strptime(x, "%Y-%m-%d").strftime("%A, %B %d, %Y")
-            )
-            df = load_saved(selected)
-            df_disp = safe_numeric(df[~df["Plant"].str.upper().str.contains("TOTAL")])
-            display_date = datetime.strptime(selected, "%Y-%m-%d").strftime("%A, %B %d, %Y")
-            st.markdown(f"### Data — **{display_date}**")
-            st.dataframe(df_disp, use_container_width=True)
+        # Use same date_input as Upload
+        default_date = available_dates[0]  # newest
+        selected_date = st.date_input(
+            "Select date to view",
+            value=default_date,
+            min_value=available_dates[-1],
+            max_value=available_dates[0],
+            help="Only dates with saved data are selectable"
+        )
 
-            total = df_disp["Production for the Day"].sum()
-            acc = df_disp["Accumulative Production"].sum()
-            st.write(f"**Total:** {total:,.2f} m³ | **Accumulative:** {acc:,.2f} m³")
+        # Validate selection
+        if selected_date not in available_dates:
+            st.warning("No data for selected date. Please choose from available dates.")
+            st.stop()
 
-            c1, c2 = st.columns(2)
-            with c1: st.plotly_chart(pie_chart(df_disp, "Production for the Day", theme_colors, "Share"), use_container_width=True)
-            with c2: st.plotly_chart(bar_chart(df_disp, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
-            st.plotly_chart(area_chart(df_disp, "Production for the Day", theme_colors, "Flow"), use_container_width=True)
+        df = load_saved(selected_date)
+        df_disp = safe_numeric(df[~df["Plant"].str.upper().str.contains("TOTAL")])
+        display_date = selected_date.strftime("%A, %B %d, %Y")
+        st.markdown(f"### Production Data — **{display_date}**")
+        st.dataframe(df_disp, use_container_width=True)
 
-            excel = generate_excel_report(df_disp, selected)
-            st.download_button("Download Excel", excel, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        total = df_disp["Production for the Day"].sum()
+        acc = df_disp["Accumulative Production"].sum()
+        st.write(f"**Total:** {total:,.2f} m³ | **Accumulative:** {acc:,.2f} m³")
+
+        c1, c2 = st.columns(2)
+        with c1: st.plotly_chart(pie_chart(df_disp, "Production for the Day", theme_colors, "Share"), use_container_width=True)
+        with c2: st.plotly_chart(bar_chart(df_disp, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
+        st.plotly_chart(area_chart(df_disp, "Production for the Day", theme_colors, "Flow"), use_container_width=True)
+
+        excel = generate_excel_report(df_disp, selected_date.strftime("%Y-%m-%d"))
+        st.download_button("Download Excel", excel, f"report_{selected_date:%Y-%m-%d}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # === MANAGE DATA ===
 elif mode == "Manage Data":
@@ -329,19 +327,19 @@ elif mode == "Manage Data":
     if not dates:
         st.info("No files.")
     else:
-        chosen = st.selectbox("Select file", dates)
+        chosen = st.selectbox("Select file", [d.strftime("%Y-%m-%d") for d in dates])
         action = st.radio("Action", ["Rename", "Delete"])
         if action == "Rename":
             new_date = st.date_input("New date", value=datetime.today())
             if st.button("Rename"):
-                if rename_saved(chosen, new_date.strftime("%Y-%m-%d")):
+                if rename_saved(datetime.strptime(chosen, "%Y-%m-%d").date(), new_date):
                     st.success("Renamed!")
                     st.rerun()
                 else:
                     st.error("Failed.")
         else:
             if st.button("Delete"):
-                if delete_saved(chosen):
+                if delete_saved(datetime.strptime(chosen, "%Y-%m-%d").date()):
                     st.success("Deleted.")
                     st.rerun()
                 else:
@@ -354,8 +352,17 @@ elif mode == "Analytics":
     if len(dates) < 2:
         st.info("Need 2+ days.")
     else:
-        start, end = date_range_selector("analytics")
-        frames = [load_saved(d) for d in dates if start <= datetime.strptime(d, "%Y-%m-%d").date() <= end]
+        with st.expander("Date Range Filter", expanded=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                start = st.date_input("Start Date", value=dates[-1], min_value=dates[-1], max_value=dates[0])
+            with c2:
+                end = st.date_input("End Date", value=dates[0], min_value=dates[-1], max_value=dates[0])
+            if start > end:
+                st.error("Start > End")
+                st.stop()
+
+        frames = [load_saved(d) for d in dates if start <= d <= end]
         if not frames:
             st.warning("No data.")
         else:
