@@ -14,9 +14,10 @@ import io
 import xlsxwriter
 # For PDF export (optional, retained for reference)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 import psutil
+
 # Page config
 st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
 # Ensure data dir
@@ -164,14 +165,14 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
         fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=12, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
-        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(margin=dict(t=60, b=100, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_tickangle=45, xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
         fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
         fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
     except Exception as e:
@@ -224,15 +225,15 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         unique_groups = agg_df[group_col].unique()
         color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=value_col)
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=11, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
-        fig.update_layout(legend_font=dict(family="Arial", size=16, color="black", weight="bold"))
+        fig.update_layout(legend_font=dict(family="Arial", size=14, color="black", weight="bold"))
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.update_layout(margin=dict(t=60, b=80, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
-        fig.update_layout(xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
-        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=12, color="black"))
+        fig.update_layout(margin=dict(t=70, b=130, l=60, r=40), plot_bgcolor="white", paper_bgcolor="white")
+        fig.update_layout(xaxis_tickangle=45, xaxis_gridcolor="#E0E0E0", yaxis_gridcolor="#E0E0E0")
+        fig.update_layout(xaxis_tickfont=dict(family="Arial", size=11, color="black"))
         fig.update_layout(yaxis_tickfont=dict(family="Arial", size=12, color="black"))
     except Exception as e:
         st.warning(f"Error in aggregated_bar_chart: {str(e)}")
@@ -294,25 +295,6 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
         df.to_excel(writer, sheet_name='Production Data', index=False)
     output.seek(0)
     return output
-# PDF Report Generator (retained for reference, can be removed if Excel is preferred)
-def generate_pdf_report(df: pd.DataFrame, date_str: str):
-    filename = f"production_report_{date_str}.pdf"
-    buffer = Path(filename)
-    doc = SimpleDocTemplate(str(buffer), pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-    story.append(Paragraph(f"Production Report - {date_str}", styles['Title']))
-    story.append(Spacer(1, 12))
-    data = [df.columns.tolist()] + df.values.tolist()
-    table = Table(data)
-    story.append(table)
-    story.append(Spacer(1, 12))
-    total = df["Production for the Day"].sum()
-    story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
-    story.append(Spacer(1, 12))
-    doc.build(story)
-    with open(buffer, "rb") as f:
-        st.download_button("Download PDF Report", f.read(), file_name=filename, mime="application/pdf")
 # UI: Login handling
 if not logged_in():
     st.title("Production Dashboard — Login required")
@@ -558,27 +540,43 @@ elif mode == "Analytics":
             filtered_df = safe_numeric(filtered_df)
             filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
             filtered_df['Month'] = filtered_df['Date'].dt.month
+
+            # Weekly
             weekly_total_df = filtered_df.groupby(['Week', 'Plant'])['Production for the Day'].sum().reset_index()
             weekly_total_fig = aggregated_bar_chart(weekly_total_df, "Production for the Day", "Week", theme_colors, f"Weekly Total Production per Site ({start_date} to {end_date})")
             st.plotly_chart(weekly_total_fig, use_container_width=True)
+
+            # Monthly
             monthly_total_df = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             monthly_total_fig = aggregated_bar_chart(monthly_total_df, "Production for the Day", "Month", theme_colors, f"Monthly Total Production per Site ({start_date} to {end_date})")
             st.plotly_chart(monthly_total_fig, use_container_width=True)
+
+            # Accumulative
             weekly_acc_df = filtered_df.groupby(['Week', 'Plant'])['Accumulative Production'].sum().reset_index()
             weekly_acc_fig = aggregated_bar_chart(weekly_acc_df, "Accumulative Production", "Week", theme_colors, f"Weekly Accumulative Production per Site ({start_date} to {end_date})")
             st.plotly_chart(weekly_acc_fig, use_container_width=True)
             monthly_acc_df = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
             monthly_acc_fig = aggregated_bar_chart(monthly_acc_df, "Accumulative Production", "Month", theme_colors, f"Monthly Accumulative Production per Site ({start_date} to {end_date})")
             st.plotly_chart(monthly_acc_fig, use_container_width=True)
-        st.markdown("### Export Report")
-        filtered_df = safe_numeric(filtered_df)
-        excel_file = generate_excel_report(filtered_df, f"{start_date} to {end_date}")
-        st.download_button(
-            label="Download Excel Report",
-            data=excel_file,
-            file_name=f"production_report_{start_date}_to_{end_date}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+
+            # Export Summary: Only Totals
+            st.markdown("### Export Summary (Totals Only)")
+            weekly_pivot = weekly_total_df.pivot(index='Plant', columns='Week', values='Production for the Day').fillna(0)
+            weekly_pivot['Weekly Total'] = weekly_pivot.sum(axis=1)
+            monthly_pivot = monthly_total_df.pivot(index='Plant', columns='Month', values='Production for the Day').fillna(0)
+            monthly_pivot['Monthly Total'] = monthly_pivot.sum(axis=1)
+            summary_df = pd.DataFrame({
+                "Plant": weekly_pivot.index,
+                "Weekly Total (m³)": weekly_pivot['Weekly Total'].values,
+                "Monthly Total (m³)": monthly_pivot['Monthly Total'].values
+            }).sort_values("Weekly Total (m³)", ascending=False)
+            excel_summary = generate_excel_report(summary_df, f"{start_date}_to_{end_date}")
+            st.download_button(
+                label="Download Summary Report (Totals Only)",
+                data=excel_summary,
+                file_name=f"production_summary_{start_date}_to_{end_date}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 # Sidebar help & closing
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
