@@ -14,7 +14,7 @@ import io
 import xlsxwriter
 # For PDF export (optional, retained for reference)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table  # FIXED: SimpleDocTemplate
 from reportlab.lib.styles import getSampleStyleSheet
 import psutil
 
@@ -295,6 +295,25 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
         df.to_excel(writer, sheet_name='Production Data', index=False)
     output.seek(0)
     return output
+# PDF Report Generator (retained for reference, can be removed if Excel is preferred)
+def generate_pdf_report(df: pd.DataFrame, date_str: str):
+    filename = f"production_report_{date_str}.pdf"
+    buffer = Path(filename)
+    doc = SimpleDocTemplate(str(buffer), pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(f"Production Report - {date_str}", styles['Title']))
+    story.append(Spacer(1, 12))
+    data = [df.columns.tolist()] + df.values.tolist()
+    table = Table(data)
+    story.append(table)
+    story.append(Spacer(1, 12))
+    total = df["Production for the Day"].sum()
+    story.append(Paragraph(f"Total Production: {total:,.2f} m³", styles['Normal']))
+    story.append(Spacer(1, 12))
+    doc.build(story)
+    with open(buffer, "rb") as f:
+        st.download_button("Download PDF Report", f.read(), file_name=filename, mime="application/pdf")
 # UI: Login handling
 if not logged_in():
     st.title("Production Dashboard — Login required")
