@@ -17,17 +17,13 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 import psutil
-
 # Page config
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="📊")
-
+st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
 # Ensure data dir
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-
 # Required columns
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
-
 # Read secrets / env
 SECRETS = {}
 try:
@@ -41,7 +37,6 @@ GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
 GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
 GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
-
 # Default users (hashed)
 _default_users = {
     "admin": hashlib.sha256("kbrc123".encode()).hexdigest()
@@ -50,24 +45,22 @@ USERS: Dict[str, str] = _default_users.copy()
 if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
     for k, v in SECRETS["USERS"].items():
         USERS[k] = v
-
 # Updated Color Themes with Extended Palettes
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95", "#F1A340", "#E76F51", "#D15B8A", "#9F5DBB", "#5F5290"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3", "#3A9D9D", "#54B5B2", "#7FCEB1", "#A9EBAF", "#D1F4B7"],
-    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],  # Red, Blue, Green, Orange, Yellow variants
+    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
     "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8", "#1A237E", "#303F9F", "#512DA8", "#8E24AA", "#AB47BC"],
     "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684", "#D8A08D", "#B6C8A9", "#9DB99A", "#82A98B", "#669A7A"],
-    "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],  # Muted gray, navy, gold
-    "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],  # Subdued blues, silvers
-    "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],  # Soft ivories, teal, burgundy
+    "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
+    "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],
+    "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],
 }
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
 elif st.session_state["theme"] not in COLOR_THEMES:
-    st.session_state["theme"] = "Modern Slate"  # Reset to default if invalid
-
+    st.session_state["theme"] = "Modern Slate"
 # Helper: hashing and auth
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -79,7 +72,7 @@ def check_credentials(username: str, password: str) -> bool:
         return hash_password(password) == USERS[user]
     return False
 def login_ui():
-    st.sidebar.subheader("🔐 Login")
+    st.sidebar.subheader("Login")
     with st.sidebar.form("login_form"):
         username = st.text_input("Username", key="login_user")
         password = st.text_input("Password", type="password", key="login_pwd")
@@ -99,7 +92,6 @@ def logout():
     st.rerun()
 def logged_in() -> bool:
     return st.session_state.get("logged_in", False)
-
 # File I/O and Git helpers
 def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool=False) -> Path:
     fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
@@ -150,13 +142,12 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
             payload["sha"] = sha
         r = requests.put(api_url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
-            return True, f"✅ Successfully uploaded to GitHub: data/{file_path.name}"
+            return True, f"Successfully uploaded to GitHub: data/{file_path.name}"
         else:
             err = r.json().get("message", r.text)
-            return False, f"❌ GitHub upload failed: {err}"
+            return False, f"GitHub upload failed: {err}"
     except Exception as e:
         return False, f"Exception during GitHub upload: {e}"
-
 # Plot helpers
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
@@ -168,7 +159,6 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     fig.update_layout(margin=dict(t=60, b=40, l=40, r=40), plot_bgcolor="white", paper_bgcolor="white", showlegend=True)
     return fig
-
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
@@ -188,7 +178,6 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in bar_chart: {str(e)}")
         fig = px.bar(df, x="Plant", y=value_col, title=title)
     return fig
-
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
@@ -208,12 +197,11 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in line_chart: {str(e)}")
         fig = px.line(df, x="Plant", y=value_col, title=title)
     return fig
-
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     if value_col not in df.columns or "Plant" not in df.columns:
         raise ValueError(f"Required columns 'Plant' or '{value_col}' not found in data frame.")
     try:
-        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)  # Removed text parameter
+        fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
         fig.update_traces(line=dict(width=2), opacity=0.8)
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -228,17 +216,15 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         st.warning(f"Error in area_chart: {str(e)}")
         fig = px.area(df, x="Plant", y=value_col, title=title)
     return fig
-
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     if value_col not in df.columns or group_col not in df.columns:
         raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found in data frame.")
     try:
         agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
-        # Ensure theme colors are applied consistently
         unique_groups = agg_df[group_col].unique()
         color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=value_col)
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -252,7 +238,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         st.warning(f"Error in aggregated_bar_chart: {str(e)}")
         fig = px.bar(agg_df, x="Plant", y=value_col, title=title)
     return fig
-
 # Analytics helpers
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -302,7 +287,6 @@ def ai_summary(df_display: pd.DataFrame, history: pd.DataFrame, date_str: str) -
         return " \n".join(lines)
     except Exception as e:
         return f"Summary unavailable: {e}"
-
 # Excel Report Generator
 def generate_excel_report(df: pd.DataFrame, date_str: str):
     output = io.BytesIO()
@@ -310,7 +294,6 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
         df.to_excel(writer, sheet_name='Production Data', index=False)
     output.seek(0)
     return output
-
 # PDF Report Generator (retained for reference, can be removed if Excel is preferred)
 def generate_pdf_report(df: pd.DataFrame, date_str: str):
     filename = f"production_report_{date_str}.pdf"
@@ -330,7 +313,6 @@ def generate_pdf_report(df: pd.DataFrame, date_str: str):
     doc.build(story)
     with open(buffer, "rb") as f:
         st.download_button("Download PDF Report", f.read(), file_name=filename, mime="application/pdf")
-
 # UI: Login handling
 if not logged_in():
     st.title("Production Dashboard — Login required")
@@ -338,7 +320,6 @@ if not logged_in():
     st.sidebar.write("---")
     st.sidebar.caption("If you don't have credentials, please contact the admin.")
     st.stop()
-
 # Main UI controls and header
 st.sidebar.title("Controls")
 st.sidebar.write(f"Logged in as: **{st.session_state.get('username','-')}**")
@@ -351,7 +332,6 @@ alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0
 st.sidebar.markdown("---")
 st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
 st.title("PRODUCTION FOR THE DAY")
-
 # Upload mode
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -378,68 +358,64 @@ if mode == "Upload New Data":
             if confirm and st.button("Upload & Save to History"):
                 df_save = df_uploaded.copy()
                 df_save["Date"] = selected_date.strftime("%Y-%m-%d")
-                if pd.to_datetime(df_save["Date"].iloc[0]).day_name() == "Friday":
-                    st.error("Selected date is Friday (non-production). Change date or cancel.")
+                try:
+                    saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
+                except FileExistsError as e:
+                    st.error(str(e))
+                    st.stop()
+                st.success(f"Saved to {saved_path}")
+                pushed, message = attempt_git_push(saved_path, f"Add production data for {selected_date.strftime('%Y-%m-%d')}")
+                if pushed:
+                    st.success(message)
                 else:
-                    try:
-                        saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
-                    except FileExistsError as e:
-                        st.error(str(e))
-                        st.stop()
-                    st.success(f"Saved to {saved_path}")
-                    pushed, message = attempt_git_push(saved_path, f"Add production data for {selected_date.strftime('%Y-%m-%d')}")
-                    if pushed:
-                        st.success(message)
-                    else:
-                        st.warning(message)
-                        st.info("If push failed, manually upload the CSV into your repo's data/ folder via GitHub UI.")
-                    df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-                    df_display = safe_numeric(df_display)
-                    st.markdown("### Totals")
-                    total_daily = df_display["Production for the Day"].sum()
-                    total_acc = df_display["Accumulative Production"].sum()
-                    st.write(f"- Total Production for the Day: **{total_daily:,.2f} m³**")
-                    st.write(f"- Total Accumulative Production: **{total_acc:,.2f} m³**")
-                    alerts = df_display[df_display["Production for the Day"] < alert_threshold]
-                    if not alerts.empty:
-                        st.warning("⚠️ Plants below threshold:")
-                        for _, r in alerts.iterrows():
-                            st.write(f"- {r['Plant']}: {r['Production for the Day']} m³")
-                    st.markdown("### Charts")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production Share")
-                        st.plotly_chart(pie_fig, use_container_width=True)
-                    with c2:
-                        bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant")
-                        st.plotly_chart(bar_fig, use_container_width=True)
-                    try:
-                        line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production Trend")
-                        area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production Flow")
-                        st.plotly_chart(line_fig, use_container_width=True)
-                        st.plotly_chart(area_fig, use_container_width=True)
-                    except Exception as e:
-                        st.warning(f"Additional charts error: {e}")
-                    try:
-                        acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production")
-                        st.plotly_chart(acc_fig, use_container_width=True)
-                    except Exception:
-                        st.info("No accumulative chart available.")
-                    try:
-                        top = df_display.loc[df_display["Production for the Day"].idxmax()]
-                        st.success(f"🏆 Highest Producer: {top['Plant']} — {float(top['Production for the Day']):,.2f} m³")
-                    except Exception:
-                        pass
-                    st.markdown("### Export Report")
-                    df_display = safe_numeric(df_display)
-                    excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
-                    st.download_button(
-                        label="Download Excel Report",
-                        data=excel_file,
-                        file_name=f"production_report_{selected_date.strftime('%Y-%m-%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
+                    st.warning(message)
+                    st.info("If push failed, manually upload the CSV into your repo's data/ folder via GitHub UI.")
+                df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+                df_display = safe_numeric(df_display)
+                st.markdown("### Totals")
+                total_daily = df_display["Production for the Day"].sum()
+                total_acc = df_display["Accumulative Production"].sum()
+                st.write(f"- Total Production for the Day: **{total_daily:,.2f} m³**")
+                st.write(f"- Total Accumulative Production: **{total_acc:,.2f} m³**")
+                alerts = df_display[df_display["Production for the Day"] < alert_threshold]
+                if not alerts.empty:
+                    st.warning("Plants below threshold:")
+                    for _, r in alerts.iterrows():
+                        st.write(f"- {r['Plant']}: {r['Production for the Day']} m³")
+                st.markdown("### Charts")
+                c1, c2 = st.columns(2)
+                with c1:
+                    pie_fig = pie_chart(df_display, "Production for the Day", theme_colors, "Production Share")
+                    st.plotly_chart(pie_fig, use_container_width=True)
+                with c2:
+                    bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Production per Plant")
+                    st.plotly_chart(bar_fig, use_container_width=True)
+                try:
+                    line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Production Trend")
+                    area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Production Flow")
+                    st.plotly_chart(line_fig, use_container_width=True)
+                    st.plotly_chart(area_fig, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Additional charts error: {e}")
+                try:
+                    acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative Production")
+                    st.plotly_chart(acc_fig, use_container_width=True)
+                except Exception:
+                    st.info("No accumulative chart available.")
+                try:
+                    top = df_display.loc[df_display["Production for the Day"].idxmax()]
+                    st.success(f"Highest Producer: {top['Plant']} — {float(top['Production for the Day']):,.2f} m³")
+                except Exception:
+                    pass
+                st.markdown("### Export Report")
+                df_display = safe_numeric(df_display)
+                excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
+                st.download_button(
+                    label="Download Excel Report",
+                    data=excel_file,
+                    file_name=f"production_report_{selected_date.strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 # View Historical Data
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -447,7 +423,12 @@ elif mode == "View Historical Data":
     if not saved_list:
         st.info("No saved history yet.")
     else:
-        selected = st.selectbox("Select date to view", saved_list, index=0)
+        default_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
+        selected_date = st.date_input("Select date to view", value=default_date)
+        selected = selected_date.strftime("%Y-%m-%d")
+        if selected not in saved_list:
+            st.warning("No data for selected date.")
+            st.stop()
         try:
             df_hist = load_saved(selected)
         except Exception as e:
@@ -523,7 +504,6 @@ elif mode == "View Historical Data":
             file_name=f"production_report_{selected}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
 # Manage Data
 elif mode == "Manage Data":
     st.header("Manage saved files (rename / delete)")
@@ -554,7 +534,6 @@ elif mode == "Manage Data":
                         st.error("Delete failed.")
                 except Exception as e:
                     st.error(f"Delete error: {e}")
-
 # Analytics
 elif mode == "Analytics":
     st.header("Analytics & trends (multi-day)")
@@ -562,18 +541,16 @@ elif mode == "Analytics":
     if len(saved) < 2:
         st.info("Upload at least two days to see multi-day analytics.")
     else:
-        # Custom date range filter
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
-        
+       
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-        
-        # Filter data
+       
         filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
         if filtered_df.empty:
             st.warning("No data in selected range.")
@@ -581,28 +558,18 @@ elif mode == "Analytics":
             filtered_df = safe_numeric(filtered_df)
             filtered_df['Week'] = filtered_df['Date'].dt.isocalendar().week
             filtered_df['Month'] = filtered_df['Date'].dt.month
-
-            # Weekly total production per site
             weekly_total_df = filtered_df.groupby(['Week', 'Plant'])['Production for the Day'].sum().reset_index()
             weekly_total_fig = aggregated_bar_chart(weekly_total_df, "Production for the Day", "Week", theme_colors, f"Weekly Total Production per Site ({start_date} to {end_date})")
             st.plotly_chart(weekly_total_fig, use_container_width=True)
-
-            # Monthly total production per site
             monthly_total_df = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             monthly_total_fig = aggregated_bar_chart(monthly_total_df, "Production for the Day", "Month", theme_colors, f"Monthly Total Production per Site ({start_date} to {end_date})")
             st.plotly_chart(monthly_total_fig, use_container_width=True)
-
-            # Weekly accumulative production per site
             weekly_acc_df = filtered_df.groupby(['Week', 'Plant'])['Accumulative Production'].sum().reset_index()
             weekly_acc_fig = aggregated_bar_chart(weekly_acc_df, "Accumulative Production", "Week", theme_colors, f"Weekly Accumulative Production per Site ({start_date} to {end_date})")
             st.plotly_chart(weekly_acc_fig, use_container_width=True)
-
-            # Monthly accumulative production per site
             monthly_acc_df = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
             monthly_acc_fig = aggregated_bar_chart(monthly_acc_df, "Accumulative Production", "Month", theme_colors, f"Monthly Accumulative Production per Site ({start_date} to {end_date})")
             st.plotly_chart(monthly_acc_fig, use_container_width=True)
-
-        # Export Report
         st.markdown("### Export Report")
         filtered_df = safe_numeric(filtered_df)
         excel_file = generate_excel_report(filtered_df, f"{start_date} to {end_date}")
@@ -612,7 +579,6 @@ elif mode == "Analytics":
             file_name=f"production_report_{start_date}_to_{end_date}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
 # Sidebar help & closing
 st.sidebar.markdown("---")
 st.sidebar.write("If Git push fails: set GITHUB_TOKEN & GITHUB_REPO in Streamlit Secrets (TOML), then restart app.")
