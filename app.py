@@ -14,7 +14,7 @@ import io
 import xlsxwriter
 # For PDF export (optional, retained for reference)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 import psutil
 # Page config
@@ -450,7 +450,7 @@ elif mode == "View Historical Data":
         st.markdown("### Charts")
         c1, c2 = st.columns(2)
         with c1:
-            pie_fig = pie_chart(df_hist_disp,  "Production for the Day", theme_colors, f"Production Share — {selected}")
+            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Share — {selected}")
             st.plotly_chart(pie_fig, use_container_width=True)
         with c2:
             bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
@@ -527,7 +527,7 @@ elif mode == "Manage Data":
         else:
             st.warning("This will permanently delete the selected file.")
             if st.button("Confirm delete"):
-                trampoline:
+                try:
                     if delete_saved(chosen):
                         st.success("Deleted.")
                     else:
