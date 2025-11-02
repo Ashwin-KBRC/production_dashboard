@@ -103,33 +103,25 @@ def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False)
     df.to_csv(p, index=False)
     return p
 
-def list_saved_dates()-launch -> List[datetime.date]:
-    dates = []
-    for p in DATA_DIR.glob("*.csv"):
-        try:
-            date_str = p.stem
-            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
-            dates.append(date_obj)
-        except:
-            continue
-    return sorted(dates, reverse=True)
+def list_saved_dates() -> List[str]:
+    return sorted([p.stem for p in DATA_DIR.glob("*.csv")], reverse=True)
 
-def load_saved(date_obj: datetime.date) -> pd.DataFrame:
-    p = DATA_DIR / f"{date_obj:%Y-%m-%d}.csv"
+def load_saved(date_str: str) -> pd.DataFrame:
+    p = DATA_DIR / f"{date_str}.csv"
     if not p.exists():
-        raise FileNotFoundError(f"No data for {date_obj}")
+        raise FileNotFoundError(f"No data for {date_str}")
     return pd.read_csv(p)
 
-def rename_saved(old: datetime.date, new: datetime.date) -> bool:
-    old_p = DATA_DIR / f"{old:%Y-%m-%d}.csv"
-    new_p = DATA_DIR / f"{new:%Y-%m-%d}.csv"
+def rename_saved(old: str, new: str) -> bool:
+    old_p = DATA_DIR / f"{old}.csv"
+    new_p = DATA_DIR / f"{new}.csv"
     if old_p.exists():
         old_p.rename(new_p)
         return True
     return False
 
-def delete_saved(date_obj: datetime.date) -> bool:
-    p = DATA_DIR / f"{date_obj:%Y-%m-%d}.csv"
+def delete_saved(date_str: str) -> bool:
+    p = DATA_DIR / f"{date_str}.csv"
     if p.exists():
         p.unlink()
         return True
@@ -225,7 +217,7 @@ st.title("PRODUCTION DASHBOARD")
 if mode == "Upload New Data":
     st.header("Upload Daily Production")
     uploaded = st.file_uploader("Choose Excel file (.xlsx)", type=["xlsx"])
-    selected_date = st.date_input("Date for this data", value=datetime.today(), help="Select the production date")
+    selected_date = st.date_input("Date for this data", value=datetime.today())
 
     if uploaded:
         try:
@@ -280,26 +272,25 @@ if mode == "Upload New Data":
                 excel = generate_excel_report(df_disp, selected_date.strftime("%Y-%m-%d"))
                 st.download_button("Download Excel", excel, f"report_{selected_date:%Y-%m-%d}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# === VIEW HISTORICAL DATA (Same style as Upload) ===
+# === VIEW HISTORICAL DATA (Clean Date Input) ===
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
     available_dates = list_saved_dates()
     if not available_dates:
         st.info("No saved data yet.")
     else:
-        # Use same date_input as Upload
-        default_date = available_dates[0]  # newest
+        # Clean, single date input (same as Upload)
         selected_date = st.date_input(
             "Select date to view",
-            value=default_date,
-            min_value=available_dates[-1],
-            max_value=available_dates[0],
-            help="Only dates with saved data are selectable"
+            value=available_dates[0],  # Newest date
+            min_value=min(available_dates),
+            max_value=max(available_dates),
+            help="Only dates with uploaded data are available"
         )
 
-        # Validate selection
+        # Validate
         if selected_date not in available_dates:
-            st.warning("No data for selected date. Please choose from available dates.")
+            st.warning("No data for selected date.")
             st.stop()
 
         df = load_saved(selected_date)
@@ -315,7 +306,7 @@ elif mode == "View Historical Data":
         c1, c2 = st.columns(2)
         with c1: st.plotly_chart(pie_chart(df_disp, "Production for the Day", theme_colors, "Share"), use_container_width=True)
         with c2: st.plotly_chart(bar_chart(df_disp, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
-        st.plotly_chart(area_chart(df_disp, "Production for the Day", theme_colors, "Flow"), use_container_width=True)
+        st.plotly_chart(area_chart(df_disp, "Production for the Day", theme_colors, "Production Flow"), use_container_width=True)
 
         excel = generate_excel_report(df_disp, selected_date.strftime("%Y-%m-%d"))
         st.download_button("Download Excel", excel, f"report_{selected_date:%Y-%m-%d}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -327,19 +318,19 @@ elif mode == "Manage Data":
     if not dates:
         st.info("No files.")
     else:
-        chosen = st.selectbox("Select file", [d.strftime("%Y-%m-%d") for d in dates])
+        chosen = st.selectbox("Select file", dates)
         action = st.radio("Action", ["Rename", "Delete"])
         if action == "Rename":
             new_date = st.date_input("New date", value=datetime.today())
             if st.button("Rename"):
-                if rename_saved(datetime.strptime(chosen, "%Y-%m-%d").date(), new_date):
+                if rename_saved(chosen, new_date.strftime("%Y-%m-%d")):
                     st.success("Renamed!")
                     st.rerun()
                 else:
                     st.error("Failed.")
         else:
             if st.button("Delete"):
-                if delete_saved(datetime.strptime(chosen, "%Y-%m-%d").date()):
+                if delete_saved(chosen):
                     st.success("Deleted.")
                     st.rerun()
                 else:
