@@ -14,7 +14,7 @@ import io
 import xlsxwriter
 # For PDF export (optional, retained for reference)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.platypus import SimpleDocDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 import psutil
 # Page config
@@ -224,7 +224,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         unique_groups = agg_df[group_col].unique()
         color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
         fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=value_col)
-        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=, color="black"))
+        fig.update_traces(texttemplate="%{text:.2s}", textposition="outside", textfont=dict(size=14, color="black"))
         fig.update_layout(title_text=title, title_font=dict(family="Arial", size=18, color="black"))
         fig.update_layout(xaxis_title="Plant", xaxis_title_font=dict(family="Arial", size=14, color="black"))
         fig.update_layout(yaxis_title=value_col, yaxis_title_font=dict(family="Arial", size=14, color="black"))
@@ -450,7 +450,7 @@ elif mode == "View Historical Data":
         st.markdown("### Charts")
         c1, c2 = st.columns(2)
         with c1:
-            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production Share — {selected}")
+            pie_fig = pie_chart(df_hist_disp,  "Production for the Day", theme_colors, f"Production Share — {selected}")
             st.plotly_chart(pie_fig, use_container_width=True)
         with c2:
             bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Production per Plant — {selected}")
@@ -527,7 +527,7 @@ elif mode == "Manage Data":
         else:
             st.warning("This will permanently delete the selected file.")
             if st.button("Confirm delete"):
-                try:
+                trampoline:
                     if delete_saved(chosen):
                         st.success("Deleted.")
                     else:
