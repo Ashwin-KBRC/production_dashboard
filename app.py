@@ -169,31 +169,28 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ========================================
-# PLOT HELPERS
+# PLOT HELPERS — FIXED OVERLAP
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    if value_col not in df.columns or "Plant" not in df.columns:
-        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found.")
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
     fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
     fig.update_layout(title_font=dict(family="Arial", size=18), legend_font=dict(size=16), margin=dict(t=60, b=40, l=40, r=40))
     return fig
 
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    if value_col not in df.columns or "Plant" not in df.columns:
-        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found.")
     fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
     fig.update_traces(
         texttemplate="%{text:.1f}",
         textposition="outside",
         textfont=dict(size=14, color="black"),
-        cliponaxis=False
+        cliponaxis=False,
+        textangle=0
     )
     fig.update_layout(
         title_font=dict(size=18),
         xaxis_title_font=dict(size=14),
         yaxis_title_font=dict(size=14),
-        margin=dict(t=60, b=160, l=60, r=40),
+        margin=dict(t=60, b=220, l=60, r=40),  # Increased for KABD 16 + 0
         xaxis_tickangle=45,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
@@ -203,8 +200,6 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    if value_col not in df.columns or "Plant" not in df.columns:
-        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found.")
     fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=value_col)
     fig.update_traces(
         marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")),
@@ -224,8 +219,6 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    if value_col not in df.columns or "Plant" not in df.columns:
-        raise ValueError(f"Required columns 'Plant' or '{value_col}' not found.")
     fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
     fig.update_traces(line=dict(width=2), opacity=0.8)
     fig.update_layout(
@@ -239,8 +232,6 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
-    if value_col not in df.columns or group_col not in df.columns:
-        raise ValueError(f"Required columns '{group_col}' or '{value_col}' not found.")
     agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
     unique_groups = agg_df[group_col].unique()
     color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
@@ -257,7 +248,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_title_font=dict(size=14),
         yaxis_title_font=dict(size=14),
         legend_font=dict(size=14),
-        margin=dict(t=70, b=200, l=60, r=40),
+        margin=dict(t=70, b=220, l=60, r=40),  # Fixed overlap
         xaxis_tickangle=45,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
@@ -331,7 +322,7 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
 # LOGIN CHECK
 # ========================================
 if not logged_in():
-    st.title("Production Dashboard — Login required")
+    st.title("Production Dashboard  Login required")
     login_ui()
     st.sidebar.write("---")
     st.sidebar.caption("If you don't have credentials, please contact the admin.")
@@ -345,7 +336,7 @@ st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
 if st.sidebar.button("Logout"):
     logout()
 
-mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=3)
+mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
 theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
 theme_colors = COLOR_THEMES[theme_choice]
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=10.0)
@@ -412,23 +403,14 @@ if mode == "Upload New Data":
                 with c2:
                     bar_fig = bar_chart(df_display, "Production for the Day", theme_colors, "Per Plant")
                     st.plotly_chart(bar_fig, use_container_width=True)
-                try:
-                    line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Trend")
-                    area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Flow")
-                    st.plotly_chart(line_fig, use_container_width=True)
-                    st.plotly_chart(area_fig, use_container_width=True)
-                except Exception as e:
-                    st.warning(f"Chart error: {e}")
-                try:
-                    acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative")
-                    st.plotly_chart(acc_fig, use_container_width=True)
-                except Exception:
-                    pass
-                try:
-                    top = df_display.loc[df_display["Production for the Day"].idxmax()]
-                    st.success(f"Top: {top['Plant']} — {float(top['Production for the Day']):,.2f} m³")
-                except Exception:
-                    pass
+                line_fig = line_chart(df_display, "Production for the Day", theme_colors, "Trend")
+                area_fig = area_chart(df_display, "Production for the Day", theme_colors, "Flow")
+                st.plotly_chart(line_fig, use_container_width=True)
+                st.plotly_chart(area_fig, use_container_width=True)
+                acc_fig = bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative")
+                st.plotly_chart(acc_fig, use_container_width=True)
+                top = df_display.loc[df_display["Production for the Day"].idxmax()]
+                st.success(f"Top: {top['Plant']} — {float(top['Production for the Day']):,.2f} m³")
                 st.markdown("### Export")
                 excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
                 st.download_button(
@@ -439,7 +421,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL
+# VIEW HISTORICAL — 7 CHARTS
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -458,52 +440,61 @@ elif mode == "View Historical Data":
         df_hist_disp = safe_numeric(df_hist_disp)
         st.subheader(f"Data for {selected}")
         st.dataframe(df_hist_disp, use_container_width=True)
+
         total_daily = df_hist_disp["Production for the Day"].sum()
         total_acc = df_hist_disp["Accumulative Production"].sum()
         st.markdown("### Totals")
         st.write(f"- Daily: **{total_daily:,.2f} m³**")
         st.write(f"- Accumulative: **{total_acc:,.2f} m³**")
-        st.markdown("### Charts")
-        c1, c2 = st.columns(2)
-        with c1:
-            pie_fig = pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}")
-            st.plotly_chart(pie_fig, use_container_width=True)
-        with c2:
-            bar_fig = bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Per Plant — {selected}")
-            st.plotly_chart(bar_fig, use_container_width=True)
+
+        st.markdown("### 7 Charts — Daily & Accumulative")
+
+        # 1. Pie
+        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
+
+        # 2. Bar Daily
+        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Production — {selected}"), use_container_width=True)
+
+        # 3. Line Daily
+        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Trend — {selected}"), use_container_width=True)
+
+        # 4. Area Daily
+        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Flow — {selected}"), use_container_width=True)
+
+        # 5. Bar Accumulative
+        st.markdown("#### Accumulative Production")
+        st.plotly_chart(bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+
+        # 6. Line Accumulative
+        st.plotly_chart(line_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
+
+        # 7. Area Accumulative
+        st.plotly_chart(area_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
+
+        # Rankings
         try:
             frames = [load_saved(d) for d in saved_list]
             all_df = pd.concat(frames, ignore_index=True)
             ranks = compute_rankings(all_df, selected)
             st.markdown("### Rankings")
             ra, rb, rc = st.columns(3)
-            with ra:
-                st.write("Daily")
-                st.dataframe(ranks['daily'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-            with rb:
-                st.write("Weekly")
-                st.dataframe(ranks['weekly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-            with rc:
-                st.write("Monthly")
-                st.dataframe(ranks['monthly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
-        except Exception:
-            st.info("Not enough data.")
+            with ra: st.write("Daily"); st.dataframe(ranks['daily'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
+            with rb: st.write("Weekly"); st.dataframe(ranks['weekly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
+            with rc: st.write("Monthly"); st.dataframe(ranks['monthly'].reset_index().rename(columns={'index':'Plant','Production for the Day':'Total'}))
+        except: pass
+
+        # AI Summary
         try:
             frames = [load_saved(d) for d in saved_list]
             all_hist = pd.concat(frames, ignore_index=True)
-            summary_md = ai_summary(df_hist_disp, all_hist, selected)
             st.markdown("### AI Summary")
-            st.markdown(summary_md)
-        except Exception:
-            pass
+            st.markdown(ai_summary(df_hist_disp, all_hist, selected))
+        except: pass
+
+        # Export
         st.markdown("### Export")
         excel_file = generate_excel_report(df_hist_disp, selected)
-        st.download_button(
-            label="Download Excel",
-            data=excel_file,
-            file_name=f"report_{selected}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
 # MANAGE DATA
@@ -530,7 +521,7 @@ elif mode == "Manage Data":
                     st.error("Failed.")
 
 # ========================================
-# ANALYTICS — FULLY FIXED
+# ANALYTICS — CUSTOM 7-DAY + ACCUMULATIVE
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -553,7 +544,6 @@ elif mode == "Analytics":
         else:
             filtered_df = safe_numeric(filtered_df)
 
-            # Custom 7-day weeks
             def assign_custom_week(date, start):
                 days_diff = (date - pd.to_datetime(start)).days
                 return days_diff // 7 + 1
@@ -561,31 +551,26 @@ elif mode == "Analytics":
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.month
 
-            # Weekly Production
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'])['Production for the Day'].sum().reset_index()
-            st.subheader(f"Weekly Production (Custom 7-Day) — {start_date} to {end_date}")
+            st.subheader(f"Weekly Production — {start_date} to {end_date}")
             fig_wd = aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production")
             st.plotly_chart(fig_wd, use_container_width=True)
 
-            # Monthly Production
             monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             st.subheader(f"Monthly Production — {start_date} to {end_date}")
             fig_md = aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production")
             st.plotly_chart(fig_md, use_container_width=True)
 
-            # Weekly Accumulative
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].sum().reset_index()
-            st.subheader(f"Weekly Accumulative Production — {start_date} to {end_date}")
+            st.subheader(f"Weekly Accumulative — {start_date} to {end_date}")
             fig_wa = aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative")
             st.plotly_chart(fig_wa, use_container_width=True)
 
-            # Monthly Accumulative
             monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
-            st.subheader(f"Monthly Accumulative Production — {start_date} to {end_date}")
+            st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
             fig_ma = aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative")
             st.plotly_chart(fig_ma, use_container_width=True)
 
-            # Export
             st.markdown("### Export Summary (Totals Only)")
             wp = weekly_daily.pivot(index='Plant', columns='Custom_Week', values='Production for the Day').fillna(0)
             wp['Weekly Total'] = wp.sum(axis=1)
@@ -598,7 +583,7 @@ elif mode == "Analytics":
             }).sort_values("Weekly Total", ascending=False)
             excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
             st.download_button(
-                "Download Summary (Totals Only)",
+                "Download Summary",
                 excel,
                 file_name=f"summary_{start_date}_to_{end_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
