@@ -44,7 +44,7 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# THEMES
+# THEMES — LAVA FLOW ADDED
 # ========================================
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
@@ -56,6 +56,7 @@ COLOR_THEMES = {
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
     "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],
     "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],
+    "Lava Flow": ["#FF4500", "#FF6B35", "#F7931E", "#FFC300", "#FFD700", "#FF8C00", "#FF6347", "#FF7F50", "#FFA500", "#FFB800"]  # NEW
 }
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
@@ -154,7 +155,7 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# PLOT HELPERS
+# PLOT HELPERS — ALL CHARTS USE theme_colors
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
@@ -277,7 +278,7 @@ st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the D
 st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# UPLOAD MODE (UNCHANGED)
+# UPLOAD MODE
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -338,7 +339,7 @@ if mode == "Upload New Data":
                 st.download_button("Download Excel", excel_file, f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# VIEW HISTORICAL (UNCHANGED)
+# VIEW HISTORICAL
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -375,7 +376,7 @@ elif mode == "View Historical Data":
         st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# ANALYTICS — WEEKLY ≠ MONTHLY (FIXED)
+# ANALYTICS — FINAL
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -397,7 +398,7 @@ elif mode == "Analytics":
             st.warning("No data.")
         else:
             filtered_df = safe_numeric(filtered_df)
-            filtered_df = filtered_df.sort_values(['Plant', 'Date'])  # CRITICAL: sort by date
+            filtered_df = filtered_df.sort_values(['Plant', 'Date'])
 
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
@@ -405,26 +406,21 @@ elif mode == "Analytics":
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
-            # WEEKLY
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'])['Production for the Day'].sum().reset_index()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].last().reset_index()
 
-            # MONTHLY
             monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].last().reset_index()
 
-            # SUMMARY: Align on Plant
             all_plants = filtered_df['Plant'].unique()
             summary = pd.DataFrame({"Plant": all_plants})
 
-            # Weekly totals
             w_daily = weekly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
             w_acc = weekly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
             summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
             summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
             summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
 
-            # Monthly totals
             m_daily = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
             m_acc = monthly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
             summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
@@ -433,7 +429,6 @@ elif mode == "Analytics":
 
             summary = summary.sort_values("Weekly Daily Total", ascending=False)
 
-            # Charts
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
@@ -446,12 +441,12 @@ elif mode == "Analytics":
             st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
-            st.markdown("### Export Summary (Weekly ≠ Monthly)")
+            st.markdown("### Download excel report")  # FIXED
             excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
             st.download_button(
-                "Download Correct Summary",
+                "Download excel report",
                 excel,
-                file_name=f"correct_summary_{start_date}_to_{end_date}.xlsx",
+                file_name=f"summary_{start_date}_to_{end_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
