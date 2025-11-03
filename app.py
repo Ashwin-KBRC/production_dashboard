@@ -168,7 +168,7 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ========================================
-# PLOT HELPERS — KABD SHOWS ACTUAL VALUE
+# PLOT HELPERS — KABD SHOWS REAL VALUE
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
@@ -189,7 +189,7 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         title_font=dict(size=18),
         xaxis_title_font=dict(size=14),
         yaxis_title_font=dict(size=14),
-        margin=dict(t=60, b=280, l=60, r=40),  # MAX SPACE FOR KABD
+        margin=dict(t=60, b=280, l=60, r=40),
         xaxis_tickangle=0,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
@@ -479,7 +479,7 @@ elif mode == "View Historical Data":
         st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# ANALYTICS — EXPORT WITH ACCUMULATIVE
+# ANALYTICS — EXPORT WITH ACCUMULATIVE (FIXED TYPO)
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -513,17 +513,13 @@ elif mode == "Analytics":
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'])['Production for the Day'].sum().reset_index()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].sum().reset_index()
             weekly = weekly_daily.merge(weekly_acc, on=['Custom_Week', 'Plant'], suffixes=('_Daily', '_Acc'))
-            weekly['Weekly_Daily_Total'] = weekly.groupby('Plant')['Production for the Day'].transform('sum')
-            weekly['Weekly_Acc_Total'] = weekly.groupby('Plant')['Accumicative Production'].transform('sum')
 
             # Monthly
             monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
             monthly = monthly_daily.merge(monthly_acc, on=['Month', 'Plant'], suffixes=('_Daily', '_Acc'))
-            monthly['Monthly_Daily_Total'] = monthly.groupby('Plant')['Production for the Day'].transform('sum')
-            monthly['Monthly_Acc_Total'] = monthly.groupby('Plant')['Accumulative Production'].transform('sum')
 
-            # Summary
+            # Summary with correct column names
             summary = pd.DataFrame({
                 "Plant": weekly['Plant'].unique(),
                 "Weekly Daily Total": weekly.groupby('Plant')['Production for the Day'].sum(),
