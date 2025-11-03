@@ -154,7 +154,7 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# PLOT HELPERS — KABD SHOWS REAL VALUE
+# PLOT HELPERS
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
@@ -375,7 +375,7 @@ elif mode == "View Historical Data":
         st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# ANALYTICS — CORRECT CALCULATIONS
+# ANALYTICS — WEEKLY ≠ MONTHLY (FIXED)
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -397,35 +397,41 @@ elif mode == "Analytics":
             st.warning("No data.")
         else:
             filtered_df = safe_numeric(filtered_df)
-            filtered_df = filtered_df.sort_values('Date')
+            filtered_df = filtered_df.sort_values(['Plant', 'Date'])  # CRITICAL: sort by date
 
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
 
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
-            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M')
+            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
-            # WEEKLY: Daily = sum, Accumulative = last
+            # WEEKLY
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'])['Production for the Day'].sum().reset_index()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].last().reset_index()
 
-            # MONTHLY: Daily = sum, Accumulative = last
+            # MONTHLY
             monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].last().reset_index()
 
-            # SUMMARY: Plant-level totals
-            weekly_totals = weekly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
-            weekly_acc_totals = weekly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
-            monthly_totals = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
-            monthly_acc_totals = monthly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
+            # SUMMARY: Align on Plant
+            all_plants = filtered_df['Plant'].unique()
+            summary = pd.DataFrame({"Plant": all_plants})
 
-            summary = pd.DataFrame({
-                "Plant": weekly_totals['Plant'],
-                "Weekly Daily Total": weekly_totals['Production for the Day'],
-                "Weekly Accumulative": weekly_acc_totals['Accumulative Production'],
-                "Monthly Daily Total": monthly_totals['Production for the Day'],
-                "Monthly Accumulative": monthly_acc_totals['Accumulative Production']
-            }).sort_values("Weekly Daily Total", ascending=False)
+            # Weekly totals
+            w_daily = weekly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
+            w_acc = weekly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
+            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
+
+            # Monthly totals
+            m_daily = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
+            m_acc = monthly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
+            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
+
+            summary = summary.sort_values("Weekly Daily Total", ascending=False)
 
             # Charts
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
@@ -440,12 +446,12 @@ elif mode == "Analytics":
             st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
-            st.markdown("### Export Summary (Accurate Totals)")
+            st.markdown("### Export Summary (Weekly ≠ Monthly)")
             excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
             st.download_button(
-                "Download Full Summary",
+                "Download Correct Summary",
                 excel,
-                file_name=f"accurate_summary_{start_date}_to_{end_date}.xlsx",
+                file_name=f"correct_summary_{start_date}_to_{end_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
