@@ -168,7 +168,7 @@ def attempt_git_push(file_path: Path, commit_message: str) -> Tuple[bool, str]:
         return False, f"Exception during GitHub upload: {e}"
 
 # ========================================
-# PLOT HELPERS — KABD OVERLAP 100% FIXED
+# PLOT HELPERS — KABD SHOWS ACTUAL VALUE
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
@@ -177,7 +177,7 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=value_col)
+    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title, text=df[value_col])
     fig.update_traces(
         texttemplate="%{text:,.0f}",
         textposition="outside",
@@ -189,7 +189,7 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         title_font=dict(size=18),
         xaxis_title_font=dict(size=14),
         yaxis_title_font=dict(size=14),
-        margin=dict(t=60, b=250, l=60, r=40),
+        margin=dict(t=60, b=280, l=60, r=40),  # MAX SPACE FOR KABD
         xaxis_tickangle=0,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
@@ -199,7 +199,7 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=value_col)
+    fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors, text=df[value_col])
     fig.update_traces(
         marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")),
         line=dict(width=3),
@@ -234,7 +234,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     agg_df = df.groupby([group_col, "Plant"])[value_col].sum().reset_index().sort_values(value_col, ascending=False)
     unique_groups = agg_df[group_col].unique()
     color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
-    fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=value_col)
+    fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title, text=agg_df[value_col])
     fig.update_traces(
         texttemplate="%{text:,.0f}",
         textposition="outside",
@@ -247,7 +247,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_title_font=dict(size=14),
         yaxis_title_font=dict(size=14),
         legend_font=dict(size=14),
-        margin=dict(t=70, b=250, l=60, r=40),
+        margin=dict(t=70, b=280, l=60, r=40),
         xaxis_tickangle=0,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
@@ -420,7 +420,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL — 7 CHARTS + KABD FIXED
+# VIEW HISTORICAL — 7 CHARTS
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -447,12 +447,10 @@ elif mode == "View Historical Data":
         st.write(f"- Accumulative: **{total_acc:,.0f} m³**")
 
         st.markdown("### 7 Charts — Daily & Accumulative")
-
         st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
         st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Production — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Flow — {selected}"), use_container_width=True)
-
         st.markdown("#### Accumulative Production")
         st.plotly_chart(bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
@@ -481,31 +479,7 @@ elif mode == "View Historical Data":
         st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# MANAGE DATA
-# ========================================
-elif mode == "Manage Data":
-    st.header("Manage saved files")
-    saved_list = list_saved_dates()
-    if not saved_list:
-        st.info("No files.")
-    else:
-        chosen = st.selectbox("Select date", saved_list)
-        action = st.radio("Action", ["Rename", "Delete"])
-        if action == "Rename":
-            new_date = st.date_input("New date", value=datetime.today())
-            if st.button("Rename"):
-                ok = rename_saved(chosen, new_date.strftime("%Y-%m-%d"))
-                st.success("Renamed.") if ok else st.error("Failed.")
-        else:
-            st.warning("Permanent delete.")
-            if st.button("Delete"):
-                if delete_saved(chosen):
-                    st.success("Deleted.")
-                else:
-                    st.error("Failed.")
-
-# ========================================
-# ANALYTICS
+# ANALYTICS — EXPORT WITH ACCUMULATIVE
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -535,41 +509,51 @@ elif mode == "Analytics":
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.month
 
+            # Weekly
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'])['Production for the Day'].sum().reset_index()
+            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].sum().reset_index()
+            weekly = weekly_daily.merge(weekly_acc, on=['Custom_Week', 'Plant'], suffixes=('_Daily', '_Acc'))
+            weekly['Weekly_Daily_Total'] = weekly.groupby('Plant')['Production for the Day'].transform('sum')
+            weekly['Weekly_Acc_Total'] = weekly.groupby('Plant')['Accumicative Production'].transform('sum')
+
+            # Monthly
+            monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
+            monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
+            monthly = monthly_daily.merge(monthly_acc, on=['Month', 'Plant'], suffixes=('_Daily', '_Acc'))
+            monthly['Monthly_Daily_Total'] = monthly.groupby('Plant')['Production for the Day'].transform('sum')
+            monthly['Monthly_Acc_Total'] = monthly.groupby('Plant')['Accumulative Production'].transform('sum')
+
+            # Summary
+            summary = pd.DataFrame({
+                "Plant": weekly['Plant'].unique(),
+                "Weekly Daily Total": weekly.groupby('Plant')['Production for the Day'].sum(),
+                "Weekly Accumulative Total": weekly.groupby('Plant')['Accumulative Production'].sum(),
+                "Monthly Daily Total": monthly.groupby('Plant')['Production for the Day'].sum(),
+                "Monthly Accumulative Total": monthly.groupby('Plant')['Accumulative Production'].sum()
+            }).reset_index(drop=True).sort_values("Weekly Daily Total", ascending=False)
+
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             fig_wd = aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production")
             st.plotly_chart(fig_wd, use_container_width=True)
 
-            monthly_daily = filtered_df.groupby(['Month', 'Plant'])['Production for the Day'].sum().reset_index()
             st.subheader(f"Monthly Production — {start_date} to {end_date}")
             fig_md = aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production")
             st.plotly_chart(fig_md, use_container_width=True)
 
-            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'])['Accumulative Production'].sum().reset_index()
             st.subheader(f"Weekly Accumulative — {start_date} to {end_date}")
             fig_wa = aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative")
             st.plotly_chart(fig_wa, use_container_width=True)
 
-            monthly_acc = filtered_df.groupby(['Month', 'Plant'])['Accumulative Production'].sum().reset_index()
             st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
             fig_ma = aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative")
             st.plotly_chart(fig_ma, use_container_width=True)
 
-            st.markdown("### Export Summary (Totals Only)")
-            wp = weekly_daily.pivot(index='Plant', columns='Custom_Week', values='Production for the Day').fillna(0)
-            wp['Weekly Total'] = wp.sum(axis=1)
-            mp = monthly_daily.pivot(index='Plant', columns='Month', values='Production for the Day').fillna(0)
-            mp['Monthly Total'] = mp.sum(axis=1)
-            summary = pd.DataFrame({
-                "Plant": wp.index,
-                "Weekly Total": wp['Weekly Total'].values,
-                "Monthly Total": mp['Monthly Total'].values
-            }).sort_values("Weekly Total", ascending=False)
+            st.markdown("### Export Summary (Daily + Accumulative)")
             excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
             st.download_button(
-                "Download Summary",
+                "Download Full Summary",
                 excel,
-                file_name=f"summary_{start_date}_to_{end_date}.xlsx",
+                file_name=f"full_summary_{start_date}_to_{end_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
