@@ -265,7 +265,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     return fig
 
 # ========================================
-# ANALYTICS HELPERS — EXACT INTEGERS
+# DATA HELPERS
 # ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -405,7 +405,43 @@ elif mode == "View Historical Data":
         st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# ANALYTICS — 100% EXACT
+# MANAGE DATA — FULLY RESTORED
+# ========================================
+elif mode == "Manage Data":
+    st.header("Manage Saved Files")
+    saved_list = list_saved_dates()
+    if not saved_list:
+        st.info("No saved files.")
+    else:
+        st.write(f"Found {len(saved_list)} file(s):")
+        for date_str in saved_list:
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                st.write(f"**{date_str}**")
+            with col2:
+                if st.button("Delete", key=f"del_{date_str}"):
+                    if delete_saved(date_str):
+                        st.success(f"Deleted {date_str}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete.")
+            with col3:
+                if st.button("Download", key=f"dl_{date_str}"):
+                    try:
+                        df = load_saved(date_str)
+                        excel = generate_excel_report(df, date_str)
+                        st.download_button(
+                            label="Download CSV",
+                            data=excel,
+                            file_name=f"{date_str}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_btn_{date_str}"
+                        )
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+# ========================================
+# ANALYTICS — 100% EXACT, NO ERROR
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -446,15 +482,19 @@ elif mode == "Analytics":
 
             w_daily = weekly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
             w_acc = weekly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
-            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0).astype(int)
-            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0).astype(int)
+            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
             summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
 
             m_daily = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
             m_acc = monthly_acc.groupby('Plant')['Accumulative Production'].last().reset_index()
-            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0).astype(int)
-            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0).astype(int)
+            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
+
+            # FIXED: Only convert numeric columns
+            numeric_cols = summary.select_dtypes(include='number').columns
+            summary[numeric_cols] = summary[numeric_cols].astype(int)
 
             summary = summary.sort_values("Weekly Daily Total", ascending=False)
 
