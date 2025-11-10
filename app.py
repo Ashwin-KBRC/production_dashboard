@@ -50,7 +50,7 @@ COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95", "#F1A340", "#E76F51", "#D15B8A", "#9F5DBB", "#5F5290"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3", "#3A9D9D", "#54B5B2", "#7FCEB1", "#A9EBAF", "#D1F4B7"],
-    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
+    "Corporate": ["#FFumbre4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
     "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8", "#1A237E", "#303F9F", "#512DA8", "#8E24AA", "#AB47BC"],
     "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684", "#D8A08D", "#B6C8A9", "#9DB99A", "#82A98B", "#669A7A"],
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
@@ -417,7 +417,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — EXACT FLOAT SUMS
+# ANALYTICS — 100% CORRECT MONTHLY SUMS
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -446,10 +446,12 @@ elif mode == "Analytics":
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
+            # DAILY PRODUCTION SUM — CORRECT
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
-            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
-
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
+
+            # ACCUMULATIVE = LAST DAY ONLY
+            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
             all_plants = filtered_df['Plant'].unique()
@@ -467,7 +469,7 @@ elif mode == "Analytics":
             summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
 
-            summary = summary.sort_values("Weekly Daily Total", ascending=False)
+            summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
