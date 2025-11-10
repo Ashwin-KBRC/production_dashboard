@@ -50,7 +50,7 @@ COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
     "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95", "#F1A340", "#E76F51", "#D15B8A", "#9F5DBB", "#5F5290"],
     "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3", "#3A9D9D", "#54B5B2", "#7FCEB1", "#A9EBAF", "#D1F4B7"],
-    "Corporate": ["#FFumbre4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
+    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
     "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8", "#1A237E", "#303F9F", "#512DA8", "#8E24AA", "#AB47BC"],
     "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684", "#D8A08D", "#B6C8A9", "#9DB99A", "#82A98B", "#669A7A"],
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
@@ -146,7 +146,7 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# PLOT HELPERS — EXACT FLOATS
+# PLOT HELPERS — CLEAN LABELS, EXACT VALUES
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
@@ -158,9 +158,9 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
     fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title,
-                 text=df[value_col].apply(lambda x: f"{x:,.1f}"))
+                 text=df[value_col].round(1))
     fig.update_traces(
-        texttemplate="%{text}",
+        texttemplate="%{text:,.1f}",
         textposition="outside",
         textfont=dict(size=16, color="black", family="Arial"),
         cliponaxis=False,
@@ -180,12 +180,12 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
     fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors,
-                  text=df[value_col].apply(lambda x: f"{x:,.1f}"))
+                  text=df[value_col].round(1))
     fig.update_traces(
         marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")),
         line=dict(width=3),
         textposition="top center",
-        texttemplate="%{text}",
+        texttemplate="%{text:,.1f}",
         textfont=dict(size=10, color="black")
     )
     fig.update_layout(
@@ -210,18 +210,28 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
 
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
-    agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum().sort_values(value_col, ascending=False)
-    unique_groups = agg_df[group_col].unique()
-    color_map = {group: colors[i % len(colors)] for i, group in enumerate(unique_groups)}
-    fig = px.bar(agg_df, x="Plant", y=value_col, color=group_col, color_discrete_map=color_map, title=title,
-                 text=agg_df[value_col].apply(lambda x: f"{x:,.1f}"))
+    agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
+    agg_df = agg_df.sort_values(value_col, ascending=False)
+
+    # Use Plotly's built-in text
+    fig = px.bar(
+        agg_df,
+        x="Plant",
+        y=value_col,
+        color=group_col,
+        color_discrete_sequence=colors,
+        title=title,
+        text=agg_df[value_col].round(1)
+    )
+
     fig.update_traces(
-        texttemplate="%{text}",
+        texttemplate="%{text:,.1f}",
         textposition="outside",
         textfont=dict(size=16, color="black", family="Arial"),
         cliponaxis=False,
         textangle=0
     )
+
     fig.update_layout(
         title_font=dict(size=18),
         legend_font=dict(size=14),
@@ -232,6 +242,8 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_tickfont=dict(size=13),
         yaxis_tickfont=dict(size=12)
     )
+
+    # KABD: Only color — NO text override
     for trace in fig.data:
         if 'KABD' in trace.name:
             trace.marker.color = "#FF4500"
@@ -239,10 +251,11 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
             trace.textfont.size = 16
             trace.textfont.family = "Arial Black"
             break
+
     return fig
 
 # ========================================
-# DATA HELPERS — PRESERVE FLOATS
+# DATA HELPERS
 # ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -417,7 +430,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — 100% CORRECT MONTHLY SUMS
+# ANALYTICS — CLEAN KABD, EXACT SUMS
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -446,11 +459,8 @@ elif mode == "Analytics":
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
-            # DAILY PRODUCTION SUM — CORRECT
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-
-            # ACCUMULATIVE = LAST DAY ONLY
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
