@@ -8,7 +8,6 @@ from typing import Dict, Any, Tuple, List
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 import io
 import xlsxwriter
@@ -147,131 +146,112 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# ANIMATED PLOT HELPERS
+# PLOT HELPERS — CLEAN LABELS, EXACT VALUES
 # ========================================
-def animated_pie(df: pd.DataFrame, value_col: str, colors: list, title: str):
+def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
     fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
     fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
-    fig.update_layout(
-        title_font=dict(family="Arial", size=18),
-        legend_font=dict(size=16),
-        margin=dict(t=60, b=40, l=40, r=40),
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 500, "redraw": True}, "fromcurrent": True}])],
-            direction="left",
-            pad={"r": 10, "t": 87},
-            showactive=False,
-            x=0.1,
-            xanchor="right",
-            y=1.1,
-            yanchor="top"
-        )]
-    )
-    frames = [go.Frame(data=[go.Pie(labels=df["Plant"], values=df[value_col] * (i/10))]) for i in range(1, 11)]
-    fig.frames = frames
+    fig.update_layout(title_font=dict(family="Arial", size=18), legend_font=dict(size=16), margin=dict(t=60, b=40, l=40, r=40))
     return fig
 
-def animated_bar(df: pd.DataFrame, value_col: str, colors: list, title: str):
+def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
-    fig = go.Figure()
-    for i, plant in enumerate(df["Plant"]):
-        fig.add_trace(go.Bar(
-            x=[plant],
-            y=[0],
-            name=plant,
-            marker_color=colors[i % len(colors)],
-            text=[0],
-            textposition="outside"
-        ))
-    fig.update_layout(
-        title=title,
-        xaxis_title="Plant",
-        yaxis_title="m³",
-        barmode='stack',
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 100, "redraw": True}, "fromcurrent": True}])],
-            direction="left",
-            pad={"r": 10, "t": 87},
-            showactive=False,
-            x=0.1,
-            xanchor="right",
-            y=1.1,
-            yanchor="top"
-        )]
+    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title,
+                 text=df[value_col].round(1))
+    fig.update_traces(
+        texttemplate="%{text:,.1f}",
+        textposition="outside",
+        textfont=dict(size=16, color="black", family="Arial"),
+        cliponaxis=False,
+        textangle=0
     )
-    max_val = df[value_col].max()
-    frames = []
-    for i in range(11):
-        frame_data = []
-        for j, plant in enumerate(df["Plant"]):
-            val = df[value_col].iloc[j] * (i/10)
-            frame_data.append(go.Bar(x=[plant], y=[val], text=[f"{val:.1f}"], textposition="outside"))
-        frames.append(go.Frame(data=frame_data))
-    fig.frames = frames
+    fig.update_layout(
+        title_font=dict(size=18),
+        margin=dict(t=60, b=280, l=60, r=40),
+        xaxis_tickangle=0,
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0",
+        xaxis_tickfont=dict(size=13),
+        yaxis_tickfont=dict(size=12)
+    )
     return fig
 
-def animated_line(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    df = df.sort_values("Date")
-    fig = px.line(df, x="Date", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-    fig.update_traces(mode='lines+markers')
-    fig.update_layout(
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 300, "redraw": True}, "fromcurrent": True}])],
-            direction="left",
-            pad={"r": 10, "t": 87},
-            showactive=False,
-            x=0.1,
-            xanchor="right",
-            y=1.1,
-            yanchor="top"
-        )]
-    )
-    frames = [go.Frame(data=[go.Scatter(x=df["Date"][:i+1], y=df[value_col][:i+1], mode='lines+markers')]) for i in range(len(df))]
-    fig.frames = frames
-    return fig
-
-def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df[value_col] = df[value_col].astype('float64')
-    groups = df[group_col].unique()
-    fig = go.Figure()
-    for i, group in enumerate(groups):
-        sub = df[df[group_col] == group]
-        for j, plant in enumerate(sub["Plant"]):
-            fig.add_trace(go.Bar(
-                x=[plant],
-                y=[0],
-                name=f"{group} - {plant}",
-                marker_color=colors[i % len(colors)]
-            ))
-    fig.update_layout(
-        title=title,
-        barmode='stack',
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 500, "redraw": True}, "fromcurrent": True}])],
-            direction="left",
-            pad={"r": 10, "t": 87},
-            showactive=False,
-            x=0.1,
-            xanchor="right",
-            y=1.1,
-            yanchor="top"
-        )]
+    fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors,
+                  text=df[value_col].round(1))
+    fig.update_traces(
+        marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")),
+        line=dict(width=3),
+        textposition="top center",
+        texttemplate="%{text:,.1f}",
+        textfont=dict(size=10, color="black")
     )
-    frames = []
-    for i in range(11):
-        frame_data = []
-        for trace_idx, trace in enumerate(fig.data):
-            group = groups[trace_idx // len(df["Plant"].unique())]
-            sub = df[df[group_col] == group]
-            val = sub[value_col].sum() * (i/10)
-            frame_data.append(go.Bar(x=[trace.x[0]], y=[val]))
-        frames.append(go.Frame(data=frame_data))
-    fig.frames = frames
+    fig.update_layout(
+        title_font=dict(size=18),
+        margin=dict(t=60, b=40, l=60, r=40),
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
+    return fig
+
+def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
+    fig.update_traces(line=dict(width=2), opacity=0.8)
+    fig.update_layout(
+        title_font=dict(size=18),
+        margin=dict(t=60, b=40, l=60, r=40),
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0"
+    )
+    return fig
+
+def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
+    agg_df = agg_df.sort_values(value_col, ascending=False)
+
+    # Use Plotly's built-in text
+    fig = px.bar(
+        agg_df,
+        x="Plant",
+        y=value_col,
+        color=group_col,
+        color_discrete_sequence=colors,
+        title=title,
+        text=agg_df[value_col].round(1)
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:,.1f}",
+        textposition="outside",
+        textfont=dict(size=16, color="black", family="Arial"),
+        cliponaxis=False,
+        textangle=0
+    )
+
+    fig.update_layout(
+        title_font=dict(size=18),
+        legend_font=dict(size=14),
+        margin=dict(t=70, b=280, l=60, r=40),
+        xaxis_tickangle=0,
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0",
+        xaxis_tickfont=dict(size=13),
+        yaxis_tickfont=dict(size=12)
+    )
+
+    # KABD: Only color — NO text override
+    for trace in fig.data:
+        if 'KABD' in trace.name:
+            trace.marker.color = "#FF4500"
+            trace.textfont.color = "#FF4500"
+            trace.textfont.size = 16
+            trace.textfont.family = "Arial Black"
+            break
+
     return fig
 
 # ========================================
@@ -362,14 +342,19 @@ if mode == "Upload New Data":
                     st.warning("Below threshold:")
                     for _, r in alerts.iterrows():
                         st.write(f"- {r['Plant']}: {r['Production for the Day']:.1f} m³")
-                st.markdown("### Animated Charts")
+                st.markdown("### Charts")
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.plotly_chart(animated_pie(df_display, "Production for the Day", theme_colors, "Share"), use_container_width=True)
+                    st.plotly_chart(pie_chart(df_display, "Production for the Day", theme_colors, "Share"), use_container_width=True)
                 with c2:
-                    st.plotly_chart(animated_bar(df_display, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
-                st.plotly_chart(animated_line(df_display, "Production for the Day", theme_colors, "Trend"), use_container_width=True)
-                st.plotly_chart(animated_bar(df_display, "Accumulative Production", theme_colors, "Accumulative"), use_container_width=True)
+                    st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
+                st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Trend"), use_container_width=True)
+                st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Flow"), use_container_width=True)
+                st.plotly_chart(bar_chart(df_display, "Accumulative Production", theme_colors, "Accumulative"), use_container_width=True)
+                top = df_display.loc[df_display["Production for the Day"].idxmax()]
+                st.success(f"Top: {top['Plant']} — {top['Production for the Day']:.1f} m³")
+                excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
+                st.download_button("Download Excel", excel_file, f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
 # VIEW HISTORICAL
@@ -396,11 +381,17 @@ elif mode == "View Historical Data":
         st.markdown("### Totals")
         st.write(f"- Daily: **{total_daily:,.1f} m³**")
         st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
-        st.markdown("### Animated Charts")
-        st.plotly_chart(animated_pie(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
-        st.plotly_chart(animated_bar(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
-        st.plotly_chart(animated_line(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(animated_bar(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+        st.markdown("### 7 Charts — Daily & Accumulative")
+        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
+        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Production — {selected}"), use_container_width=True)
+        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Trend — {selected}"), use_container_width=True)
+        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Flow — {selected}"), use_container_width=True)
+        st.markdown("#### Accumulative Production")
+        st.plotly_chart(bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+        st.plotly_chart(line_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
+        st.plotly_chart(area_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
+        excel_file = generate_excel_report(df_hist_disp, selected)
+        st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
 # MANAGE DATA
@@ -439,11 +430,11 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — ANIMATED
+# ANALYTICS — CLEAN KABD, EXACT SUMS
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
-    saved = list_saved_datesb
+    saved = list_saved_dates()
     if len(saved) < 2:
         st.info("Need 2+ days.")
     else:
@@ -461,23 +452,59 @@ elif mode == "Analytics":
         else:
             filtered_df = safe_numeric(filtered_df)
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
-            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
-            def get_week_num(date, start):
+
+            def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
-            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: get_week_num(x, start_date))
+
+            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
+            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-            def last_of_period(df, period_col):
-                return df.sort_values('Date').groupby([period_col, 'Plant'], as_index=False).apply(lambda x: x.iloc[-1][['Accumulative Production']]).reset_index(drop=True)
-            weekly_acc = last_of_period(filtered_df, 'Custom_Week')
-            monthly_acc = last_of_period(filtered_df, 'Month')
-            st.subheader("Animated Weekly")
-            st.plotly_chart(animated_aggregated_bar(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly"), use_container_width=True)
-            st.subheader("Animated Monthly")
-            st.plotly_chart(animated_aggregated_bar(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly"), use_container_width=True)
+            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
+            monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+
+            all_plants = filtered_df['Plant'].unique()
+            summary = pd.DataFrame({"Plant": all_plants})
+
+            w_daily = weekly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
+            w_acc = weekly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
+            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
+
+            m_daily = monthly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
+            m_acc = monthly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
+            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
+
+            summary = summary.sort_values("Monthly Daily Total", ascending=False)
+
+            st.subheader(f"Weekly Production — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
+
+            st.subheader(f"Monthly Production — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Daily"), use_container_width=True)
+
+            st.subheader(f"Weekly Accumulative — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+
+            st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
+
+            st.markdown("### DOWNLOAD REPORT AS EXCEL")
+            excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
+            st.download_button(
+                "DOWNLOAD REPORT AS EXCEL",
+                excel,
+                file_name=f"report_{start_date}_to_{end_date}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set GITHUB_TOKEN & GITHUB_REPO in secrets for auto-push.")
+
