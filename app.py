@@ -530,7 +530,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — ANIMATED PODIUM TOP 3 + ACCUMULATIVE
+# ANALYTICS — STATIC PODIUM (NO ANIMATION)
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -585,56 +585,47 @@ elif mode == "Analytics":
 
             st.markdown("## TOP 3 PRODUCTION SITES")
 
-            # === CSS ANIMATIONS ===
+            # === STATIC CARD STYLE ===
             st.markdown("""
             <style>
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.08); }
-                100% { transform: scale(1); }
-            }
-            @keyframes bounce {
-                0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-                40% { transform: translateY(-15px); }
-                60% { transform: translateY(-7px); }
-            }
-            @keyframes swing {
-                0% { transform: rotate(0deg); }
-                50% { transform: rotate(5deg); }
-                100% { transform: rotate(0deg); }
-            }
-            .podium-1st { animation: pulse 2s infinite; }
-            .podium-2nd { animation: bounce 1.6s infinite; }
-            .podium-3rd { animation: swing 2s infinite; }
             .podium-card {
-                padding: 16px;
+                padding: 20px;
                 border-radius: 16px;
-                margin: 10px;
+                margin: 12px;
                 text-align: center;
-                box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-                transition: all 0.3s ease;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+                background: white;
+                border: 3px solid;
             }
-            .podium-card:hover { transform: translateY(-5px); box-shadow: 0 12px 20px rgba(0,0,0,0.2); }
+            .rank-line {
+                border-bottom: 3px solid;
+                padding-bottom: 8px;
+                margin-bottom: 10px;
+                font-weight: 900;
+            }
             </style>
             """, unsafe_allow_html=True)
 
             # === DAILY PODIUM ===
             st.markdown("### Daily Production")
             podium_cols = st.columns(3)
+            colors_daily = ["#FFD700", "#C0C0C0", "#CD7F32"]
             for idx in range(min(3, len(top_daily))):
                 row = top_daily.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
-                size = [36, 28, 22][idx]
-                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]
-                anim_class = ["podium-1st", "podium-2nd", "podium-3rd"][idx]
+                color = colors_daily[idx]
                 with podium_cols[idx]:
                     st.markdown(
-                        f"<div class='podium-card {anim_class}' style='background:linear-gradient(135deg, {color}20, #ffffff); border: 2px solid {color};'>"
-                        f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:8px 0;'>"
-                        f"**{rank}**<br>"
-                        f"<strong style='font-size:20px;'>{row['Plant']}</strong><br>"
-                        f"<span style='font-size:{size-6}px; color:#1a1a1a;'>{row['Monthly Daily Total']:,.1f} m³</span>"
-                        f"</h{6-idx}>"
+                        f"<div class='podium-card' style='border-color:{color};'>"
+                        f"<div class='rank-line' style='border-color:{color}; color:{color}; font-size:28px;'>"
+                        f"**{rank}**"
+                        f"</div>"
+                        f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:10px 0;'>"
+                        f"{row['Plant']}"
+                        f"</div>"
+                        f"<div style='font-size:28px; color:#1a1a1a;'>"
+                        f"{row['Monthly Daily Total']:,.1f} m³"
+                        f"</div>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -644,20 +635,23 @@ elif mode == "Analytics":
             # === ACCUMULATIVE PODIUM ===
             st.markdown("### Accumulative Production")
             podium_cols_acc = st.columns(3)
+            colors_acc = ["#1E90FF", "#4682B4", "#5F9EA0"]
             for idx in range(min(3, len(top_acc))):
                 row = top_acc.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
-                size = [36, 28, 22][idx]
-                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]
-                anim_class = ["podium-1st", "podium-2nd", "podium-3rd"][idx]
+                color = colors_acc[idx]
                 with podium_cols_acc[idx]:
                     st.markdown(
-                        f"<div class='podium-card {anim_class}' style='background:linear-gradient(135deg, {color}20, #ffffff); border: 2px solid {color};'>"
-                        f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:8px 0;'>"
-                        f"**{rank}**<br>"
-                        f"<strong style='font-size:20px;'>{row['Plant']}</strong><br>"
-                        f"<span style='font-size:{size-6}px; color:#1a1a1a;'>{row['Monthly Accumulative']:,.1f} m³</span>"
-                        f"</h{6-idx}>"
+                        f"<div class='podium-card' style='border-color:{color};'>"
+                        f"<div class='rank-line' style='border-color:{color}; color:{color}; font-size:28px;'>"
+                        f"**{rank}**"
+                        f"</div>"
+                        f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:10px 0;'>"
+                        f"{row['Plant']}"
+                        f"</div>"
+                        f"<div style='font-size:28px; color:#1a1a1a;'>"
+                        f"{row['Monthly Accumulative']:,.1f} m³"
+                        f"</div>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
