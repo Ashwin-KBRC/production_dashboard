@@ -530,7 +530,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — STATIC PODIUM (NO ANIMATION)
+# ANALYTICS — OVERALL + PODIUM TOP 3
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -583,11 +583,24 @@ elif mode == "Analytics":
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
+            # === OVERALL TOTALS ===
+            overall_daily = summary['Monthly Daily Total'].sum()
+            overall_acc = summary['Monthly Accumulative'].sum()
+
             st.markdown("## TOP 3 PRODUCTION SITES")
 
-            # === STATIC CARD STYLE ===
+            # === CSS STYLE ===
             st.markdown("""
             <style>
+            .overall-card {
+                padding: 22px;
+                border-radius: 16px;
+                margin: 12px 6px;
+                text-align: center;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+                background: white;
+                border: 3px solid #28a745;
+            }
             .podium-card {
                 padding: 20px;
                 border-radius: 16px;
@@ -603,8 +616,42 @@ elif mode == "Analytics":
                 margin-bottom: 10px;
                 font-weight: 900;
             }
+            .title-line {
+                border-bottom: 3px solid #28a745;
+                padding-bottom: 8px;
+                margin-bottom: 10px;
+                font-weight: 900;
+                color: #28a745;
+                font-size: 24px;
+            }
             </style>
             """, unsafe_allow_html=True)
+
+            # === OVERALL ROW (2 BOXES) ===
+            st.markdown("### Overall Performance")
+            overall_cols = st.columns(2)
+            with overall_cols[0]:
+                st.markdown(
+                    f"<div class='overall-card'>"
+                    f"<div class='title-line'>OVERALL PRODUCTION</div>"
+                    f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:8px 0;'>"
+                    f"{overall_daily:,.1f} m³"
+                    f"</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+            with overall_cols[1]:
+                st.markdown(
+                    f"<div class='overall-card'>"
+                    f"<div class='title-line'>OVERALL ACCUMULATIVE</div>"
+                    f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:8px 0;'>"
+                    f"{overall_acc:,.1f} m³"
+                    f"</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # === DAILY PODIUM ===
             st.markdown("### Daily Production")
