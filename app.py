@@ -220,12 +220,12 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FIXED: KABD text is clean, bold, red, no scribbling ===
+# === FINAL FIX: KABD TEXT CLEAN, BOLD, RED – NO SCRIBBLING ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
     agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
-    agg_df = agg_df.sort_values(value_col, ascending=False)
+    agg_df = agg_df.sort_values([group_col, value_col], ascending=[True, False])
 
     fig = px.bar(
         agg_df,
@@ -236,13 +236,15 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         title=title,
         text=agg_df[value_col].round(1)
     )
+
+    # Base text
     fig.update_traces(
         texttemplate="%{text:,.1f}",
         textposition="outside",
-        textfont=dict(size=14, color="black", family="Arial"),
-        cliponaxis=False,
-        textangle=0
+        textfont=dict(size=13, color="black"),
+        cliponaxis=False
     )
+
     fig.update_layout(
         title_font=dict(size=18),
         legend_font=dict(size=14),
@@ -251,20 +253,34 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
         xaxis_tickfont=dict(size=13),
-        yaxis_tickfont=dict(size=12)
+        yaxis_tickfont=dict(size=12),
+        bargap=0.2
     )
 
-    # === KABD: Highlight only its bar and text ===
+    # === KABD: RED + BOLD ONLY FOR KABD ===
+    marker_colors = []
+    text_colors = []
+    text_sizes = []
+    text_families = []
+
+    for _, row in agg_df.iterrows():
+        if row['Plant'] == 'KABD':
+            marker_colors.append("#FF4500")
+            text_colors.append("#FF4500")
+            text_sizes.append(16)
+            text_families.append("Arial Black")
+        else:
+            marker_colors.append(None)  # Use default color from group
+            text_colors.append("black")
+            text_sizes.append(13)
+            text_families.append("Arial")
+
+    # Apply per-bar styling
     for trace in fig.data:
-        if trace.name and 'KABD' in trace.name:
-            kabd_mask = agg_df['Plant'] == 'KABD'
-            if kabd_mask.any():
-                trace.marker.color = "#FF4500"
-                trace.textfont.color = "#FF4500"
-                trace.textfont.size = 16
-                trace.textfont.family = "Arial Black"
-                trace.textposition = "outside"
-            break
+        trace.marker.color = marker_colors
+        trace.textfont.color = text_colors
+        trace.textfont.size = text_sizes
+        trace.textfont.family = text_families
 
     return fig
 
@@ -382,7 +398,6 @@ if mode == "Upload New Data":
                 st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Daily Trend"), use_container_width=True)
                 st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Daily Flow"), use_container_width=True)
 
-                # === ACCUMULATIVE FROM UPLOADED EXCEL ===
                 st.markdown("#### Accumulative Production — From Uploaded Excel")
                 acc_df = df_display[["Plant", "Accumulative Production"]].copy()
                 acc_df = acc_df.sort_values("Accumulative Production", ascending=False)
@@ -434,7 +449,6 @@ elif mode == "View Historical Data":
         st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
 
-        # === ACCUMULATIVE FROM SAVED FILE ===
         st.markdown("#### Accumulative Production — From Saved File")
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
         acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
@@ -488,7 +502,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — USE .last() FOR ACCUMULATIVE
+# ANALYTICS — .last() FOR ACCUMULATIVE
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -520,7 +534,6 @@ elif mode == "Analytics":
 
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
