@@ -232,7 +232,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL: UNIQUE GRADIENT PER WEEK/MONTH + KABD RED ===
+# === FINAL: UNIQUE GRADIENT PER WEEK/MONTH + KABD RED + NO KeyError ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -244,14 +244,17 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
     palette_map = {}
     for i, group in enumerate(unique_groups):
         palette = WEEKLY_PALETTES[i % len(WEEKLY_PALETTES)]
-        palette_map[group] = palette
+        palette_map[str(group)] = palette  # Ensure string key
+
+    # Create color map for initial trace (one color per group)
+    color_discrete_map = {str(g): palette_map[str(g)][0] for g in unique_groups}
 
     fig = px.bar(
         agg_df,
         x="Plant",
         y=value_col,
         color=group_col,
-        color_discrete_map={g: palette_map[g][0] for g in unique_groups},
+        color_discrete_map=color_discrete_map,
         title=title,
         text=agg_df[value_col].round(1)
     )
@@ -278,8 +281,10 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
     # Apply gradient + KABD red
     current_idx = 0
     for trace in fig.data:
-        group = trace.name
-        palette = palette_map[group]
+        group_key = str(trace.name)  # Ensure string
+        if group_key not in palette_map:
+            continue  # Safety
+        palette = palette_map[group_key]
         trace_len = len(trace.x)
         colors = []
         text_colors = []
