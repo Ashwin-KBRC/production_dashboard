@@ -204,10 +204,10 @@ elif mode == "Manage":
                 st.download_button("Get", excel, f"{d}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"btn_{d}")
 
 # ========================================
-# ANALYTICS — FINAL FIX
+# ANALYTICS — FINAL 100% CORRECT
 # ========================================
 elif mode == "Analytics":
-    st.header("Analytics")
+    st.header("Analytics & Trends")
     dates = list_saved_dates()
     if len(dates) < 2: st.info("Need 2+ days"); st.stop()
 
@@ -224,11 +224,13 @@ elif mode == "Analytics":
     df = safe_numeric(df)
     df = df.sort_values(['Plant','Date'])
     df['Month'] = df['Date'].dt.to_period('M').astype(str)
+    df['Week'] = ((df['Date'] - pd.to_datetime(start)).dt.days // 7) + 1
 
-    # DAILY SUM
+    # DAILY PRODUCTION
+    weekly_daily = df.groupby(['Week','Plant'], as_index=False)['Production for the Day'].sum()
     monthly_daily = df.groupby(['Month','Plant'], as_index=False)['Production for the Day'].sum()
 
-    # ACCUMULATIVE = LAST DAY OF MONTH
+    # ACCUMULATIVE = LAST DAY OF PERIOD
     monthly_max = df.groupby(['Month','Plant'])['Date'].max().reset_index()
     monthly_acc = pd.merge(
         df[['Date','Month','Plant','Accumulative Production']],
@@ -237,16 +239,31 @@ elif mode == "Analytics":
         how='inner'
     )[['Month','Plant','Accumulative Production']]
 
-    # FINAL CHART — 100% FROM "Accumulative Production"
-    st.subheader("Monthly Accumulative Production (Final Day)")
-    st.plotly_chart(
-        aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"),
-        use_container_width=True
-    )
+    weekly_max = df.groupby(['Week','Plant'])['Date'].max().reset_index()
+    weekly_acc = pd.merge(
+        df[['Date','Week','Plant','Accumulative Production']],
+        weekly_max,
+        on=['Week','Plant','Date'],
+        how='inner'
+    )[['Week','Plant','Accumulative Production']]
+
+    # ALL CHARTS — RESTORED
+    st.subheader("Weekly Production (Daily Sum)")
+    st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Week", theme_colors, "Weekly Daily"), use_container_width=True)
+
+    st.subheader("Monthly Production (Daily Sum)")
+    st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Daily"), use_container_width=True)
+
+    st.subheader("Weekly Accumulative (Final Day)")
+    st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+
+    st.subheader("Monthly Accumulative (Final Day)")
+    st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
     # DEBUG
-    st.markdown("### DEBUG: Last Day Accumulative Values")
-    debug = monthly_acc.sort_values(['Month','Plant'])
+    st.markdown("### DEBUG: Monthly Accumulative (From Last Day)")
+    debug = monthly_acc.sort_values(['Month','Plant']).copy()
+    debug['Accumulative Production'] = debug['Accumulative Production'].round(1)
     st.dataframe(debug, use_container_width=True)
 
     # DOWNLOAD
@@ -256,4 +273,4 @@ elif mode == "Analytics":
 # ========================================
 # FOOTER
 # ========================================
-st.sidebar.caption(f"Kuwait: {datetime.now().strftime('%I:%M %p')} | LIVE")
+st.sidebar.caption(f"KUWAIT: {datetime.now().strftime('%I:%M %p')} | LIVE")
