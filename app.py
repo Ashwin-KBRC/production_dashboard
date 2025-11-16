@@ -220,7 +220,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL: KABD BOLD RED, NO ERRORS, WORKS EVERYWHERE ===
+# === FINAL: NO ERRORS, KABD BOLD RED, CLEAN TEXT ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -260,39 +260,42 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     kabd_mask = agg_df['Plant'] == 'KABD'
     total_rows = len(agg_df)
 
-    # Get default color per group
-    trace_colors = {}
+    # Map group to its default color
+    group_to_color = {}
     for trace in fig.data:
         if trace.name:
-            trace_colors[trace.name] = trace.marker.color[0] if trace.marker.color else colors[0]
+            group_to_color[trace.name] = trace.marker.color[0] if isinstance(trace.marker.color, list) and trace.marker.color else colors[0]
 
     # Build per-bar styling
-    final_marker_colors = []
-    final_text_colors = []
-    final_text_sizes = []
-    final_text_families = []
+    marker_colors = []
+    text_colors = []
+    text_sizes = []
+    text_families = []
 
     for idx, row in agg_df.iterrows():
-        group = str(row[group_col])
-        default_color = trace_colors.get(group, colors[0])
+        group_key = str(row[group_col])
+        default_color = group_to_color.get(group_key, colors[0])
 
         if kabd_mask.iloc[idx]:
-            final_marker_colors.append("#FF4500")
-            final_text_colors.append("#FF4500")
-            final_text_sizes.append(16)
-            final_text_families.append("Arial Black")
+            marker_colors.append("#FF4500")
+            text_colors.append("#FF4500")
+            text_sizes.append(16)
+            text_families.append("Arial Black")
         else:
-            final_marker_colors.append(default_color)
-            final_text_colors.append("black")
-            final_text_sizes.append(13)
-            final_text_families.append("Arial")
+            marker_colors.append(default_color)
+            text_colors.append("black")
+            text_sizes.append(13)
+            text_families.append("Arial")
 
-    # Apply to all traces
+    # === APPLY STYLING TO EACH TRACE INDIVIDUALLY ===
+    current_idx = 0
     for trace in fig.data:
-        trace.marker.color = final_marker_colors
-        trace.textfont.color = final_text_colors
-        trace.textfont.size = final_text_sizes
-        trace.textfont.family = final_text_families
+        trace_len = len(trace.x)
+        trace.marker.color = marker_colors[current_idx:current_idx + trace_len]
+        trace.textfont.color = text_colors[current_idx:current_idx + trace_len]
+        trace.textfont.size = text_sizes[current_idx:current_idx + trace_len]
+        trace.textfont.family = text_families[current_idx:current_idx + trace_len]
+        current_idx += trace_len
 
     return fig
 
@@ -431,7 +434,7 @@ if mode == "Upload New Data":
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
-    saved_list = list_saved_dates()
+    saved_list  = list_saved_dates()
     if not saved_list:
         st.info("No data.")
     else:
