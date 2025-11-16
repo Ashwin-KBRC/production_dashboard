@@ -313,8 +313,11 @@ def animated_line(df: pd.DataFrame, value_col: str, colors: list, title: str):
     return fig
 
 def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    df = df[df[value_col] > 0].copy()  # REMOVE ZEROS
+    if df.empty:
+        return go.Figure().add_annotation(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     df[value_col] = df[value_col].astype('float64')
-    groups = sorted(df[group_col].unique())
+903    groups = sorted(df[group_col].unique())
     fig = go.Figure()
     for i, group in enumerate(groups):
         sub = df[df[group_col] == group]
@@ -517,7 +520,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — BIG BOLD, EXACT ACCUM
+# ANALYTICS — FULLY FIXED + WEEKLY + FILTER ZEROS
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -540,34 +543,48 @@ elif mode == "Analytics":
             filtered_df = safe_numeric(filtered_df)
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
-            def assign_custom_week(date, start):
-                return (date - pd.to_datetime(start)).days // 7 + 1
-            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
+            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: (x - pd.to_datetime(start_date)).days // 7 + 1)
 
+            # === DAILY PRODUCTION ===
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-            monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+            weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
 
-            # BIG BOLD SUMMARY
+            # === ACCUMULATIVE (FINAL DAY) ===
+            monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
+
+            # === MAIN BOX: FILTER UNDERPERFORMERS (>10 m³ total) ===
+            total_by_plant = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
+            active_plants = total_by_plant[total_by_plant['Production for the Day'] > 10]['Plant'].tolist()
+
             total_monthly = monthly_daily['Production for the Day'].sum()
             top_plant_row = monthly_daily.loc[monthly_daily['Production for the Day'].idxmax()]
             top_plant = top_plant_row['Plant']
             top_value = top_plant_row['Production for the Day']
             kabd_value = monthly_daily[monthly_daily['Plant'].str.contains('KABD', case=False, na=False)]['Production for the Day'].sum() if any(monthly_daily['Plant'].str.contains('KABD', case=False, na=False)) else 0
 
+            # === BIG BOLD BOX ===
             st.markdown(f"""
             <div style='text-align: center; padding: 30px; background: linear-gradient(45deg, #1a1a1a, #333); border-radius: 20px; margin: 30px 0; box-shadow: 0 0 20px rgba(255,69,0,0.5);'>
                 <h1 style='color: #FFD700; font-size: 52px; margin: 0; text-shadow: 0 0 10px #FFD700;'>TOTAL MONTHLY PRODUCTION</h1>
                 <h1 style='color: #00FF00; font-size: 72px; margin: 15px 0; text-shadow: 0 0 15px #00FF00;'>{total_monthly:,.1f} m³</h1>
                 <h2 style='color: #FF4500; font-size: 40px; margin: 20px 0;'>TOP PERFORMER: <span style='color: #FFD700;'>{top_plant}</span> — {top_value:,.1f} m³</h2>
-                <h2 style='color: {'#00FF00' if kabd_value > 400 else '#FF4500'}; font-size: 36px; text-shadow: 0 0 10px;'>KABD: {kabd_value:,.1f} m³ {'ON FIRE' if kabd_value > 400 else 'NEEDS BOOST'}</h2>
+                {f'<h2 style=\"color: {"#00FF00" if kabd_value > 400 else "#FF4500"}; font-size: 36px; text-shadow: 0 0 10px;\">KABD: {kabd_value:,.1f} m³ {"ON FIRE" if kabd_value > 400 else "NEEDS BOOST"}</h2>' if kabd_value > 0 else ''}
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("### Animated Monthly Production")
+            # === CHARTS ===
+            st.markdown("### Monthly Production (Daily)")
             st.plotly_chart(animated_aggregated_bar(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly"), use_container_width=True, config={"staticPlot": False})
 
-            st.markdown("### Animated Monthly Accumulative (Final Day)")
+            st.markdown("### Weekly Production (Daily)")
+            st.plotly_chart(animated_aggregated_bar(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly"), use_container_width=True, config={"staticPlot": False})
+
+            st.markdown("### Monthly Accumulative (Final Day)")
             st.plotly_chart(animated_aggregated_bar(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True, config={"staticPlot": False})
+
+            st.markdown("### Weekly Accumulative (Final Day)")
+            st.plotly_chart(animated_aggregated_bar(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True, config={"staticPlot": False})
 
             st.markdown("### Download Full Report")
             summary_df = monthly_daily.copy()
