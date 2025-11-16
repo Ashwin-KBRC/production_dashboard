@@ -532,7 +532,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — TOP 3 + GRADIENT
+# ANALYTICS — TOP 3 SAFE + GRADIENT
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -582,7 +582,7 @@ elif mode == "Analytics":
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
-            # === TOP 3 DAILY & ACCUMULATIVE ===
+            # === TOP 3 DAILY & ACCUMULATIVE — SAFE INDEXING ===
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']]
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']]
 
@@ -590,13 +590,14 @@ elif mode == "Analytics":
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("### **Daily Production**")
+                ranks = ["**1st**", "**2nd**", "**3rd**"]
                 for i, row in top_daily.iterrows():
-                    rank = ["**1st**", "**2nd**", "**3rd**"][i]
+                    rank = ranks[i] if i < len(ranks) else f"**{i+1}th**"
                     st.markdown(f"<h2 style='color:#FF4500;'>{rank} → **{row['Plant']}**: `{row['Monthly Daily Total']:,.1f} m³`</h2>", unsafe_allow_html=True)
             with col2:
                 st.markdown("### **Accumulative Production**")
                 for i, row in top_acc.iterrows():
-                    rank = ["**1st**", "**2nd**", "**3rd**"][i]
+                    rank = ranks[i] if i < len(ranks) else f"**{i+1}th**"
                     st.markdown(f"<h2 style='color:#1E90FF;'>{rank} → **{row['Plant']}**: `{row['Monthly Accumulative']:,.1f} m³`</h2>", unsafe_allow_html=True)
 
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
