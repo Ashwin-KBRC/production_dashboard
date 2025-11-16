@@ -8,6 +8,7 @@ from typing import Dict, Any, Tuple, List
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import io
 import xlsxwriter
@@ -44,7 +45,7 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# THEMES
+# THEMES — 3 NEW: LAVA, NEON, GOLD
 # ========================================
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
@@ -56,11 +57,15 @@ COLOR_THEMES = {
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
     "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],
     "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],
+    # NEW THEMES
+    "Lava Flow": ["#FF4500", "#FF6B35", "#F7931E", "#FFD23F", "#FF8C00", "#1A1A1A", "#FF5733", "#FFC300", "#FF5733", "#DAF7A6"],
+    "Neon Pulse": ["#00FF00", "#00FFFF", "#FF00FF", "#FFFF00", "#00FF7F", "#1E1E1E", "#39FF14", "#00CED1", "#FF1493", "#FFD700"],
+    "Gold Standard": ["#FFD700", "#FFA500", "#DAA520", "#B8860B", "#CD7F32", "#2F2F2F", "#FFCC00", "#FF9900", "#CC9900", "#996600"],
 }
 if "theme" not in st.session_state:
-    st.session_state["theme"] = "Modern Slate"
+    st.session_state["theme"] = "Lava Flow"
 elif st.session_state["theme"] not in COLOR_THEMES:
-    st.session_state["theme"] = "Modern Slate"
+    st.session_state["theme"] = "Lava Flow"
 
 # ========================================
 # AUTH FUNCTIONS
@@ -212,8 +217,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     df[value_col] = df[value_col].astype('float64')
     agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
     agg_df = agg_df.sort_values(value_col, ascending=False)
-
-    # Use Plotly's built-in text
     fig = px.bar(
         agg_df,
         x="Plant",
@@ -223,7 +226,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         title=title,
         text=agg_df[value_col].round(1)
     )
-
     fig.update_traces(
         texttemplate="%{text:,.1f}",
         textposition="outside",
@@ -231,7 +233,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         cliponaxis=False,
         textangle=0
     )
-
     fig.update_layout(
         title_font=dict(size=18),
         legend_font=dict(size=14),
@@ -242,8 +243,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_tickfont=dict(size=13),
         yaxis_tickfont=dict(size=12)
     )
-
-    # KABD: Only color — NO text override
     for trace in fig.data:
         if 'KABD' in trace.name:
             trace.marker.color = "#FF4500"
@@ -251,7 +250,95 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
             trace.textfont.size = 16
             trace.textfont.family = "Arial Black"
             break
+    return fig
 
+# ========================================
+# ANIMATED PLOT HELPERS — FIXED & SMOOTH
+# ========================================
+def animated_pie(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    fig = go.Figure()
+    fig.add_trace(go.Pie(labels=df["Plant"], values=[0]*len(df), textinfo="percent+label", marker_colors=colors))
+    fig.update_layout(
+        title=title, title_font=dict(size=18), legend_font=dict(size=16),
+        margin=dict(t=60, b=40, l=40, r=40),
+        updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 600}, "fromcurrent": True}])], direction="left", pad={"r": 10, "t": 87}, showactive=False, x=0.1, xanchor="right", y=1.1, yanchor="top")]
+    )
+    frames = [go.Frame(data=[go.Pie(labels=df["Plant"], values=df[value_col] * (i/10))]) for i in range(1, 11)]
+    fig.frames = frames
+    return fig
+
+def animated_bar(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    fig = go.Figure()
+    for i, plant in enumerate(df["Plant"]):
+        fig.add_trace(go.Bar(x=[plant], y=[0], name=plant, marker_color=colors[i % len(colors)], text=[0], textposition="outside"))
+    fig.update_layout(
+        title=title, xaxis_title="Plant", yaxis_title="m³", barmode='relative',
+        updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 100}, "fromcurrent": True}])], direction="left", pad={"r": 10, "t": 87}, showactive=False, x=0.1, xanchor="right", y=1.1, yanchor="top")]
+    )
+    frames = []
+    for i in range(11):
+        frame_data = [go.Bar(x=[p], y=[v * (i/10)], text=[f"{v * (i/10):.1f}"], textposition="outside") for p, v in zip(df["Plant"], df[value_col])]
+        frames.append(go.Frame(data=frame_data))
+    fig.frames = frames
+    return fig
+
+def animated_line(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df = df.copy()
+    df[value_col] = df[value_col].astype('float64')
+    if 'Date' not in df.columns:
+        df['Date'] = pd.date_range(start='2025-01-01', periods=len(df), freq='D')
+    df = df.sort_values("Date").reset_index(drop=True)
+    fig = go.Figure()
+    plants = df["Plant"].unique()
+    for i, plant in enumerate(plants):
+        sub = df[df["Plant"] == plant]
+        fig.add_trace(go.Scatter(x=sub["Date"], y=[0]*len(sub), mode='lines+markers', name=plant, line=dict(color=colors[i % len(colors)])))
+    fig.update_layout(
+        title=title, xaxis_title="Date", yaxis_title="m³",
+        updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 400}, "fromcurrent": True}])], direction="left", pad={"r": 10, "t": 87}, showactive=False, x=0.1, xanchor="right", y=1.1, yanchor="top")]
+    )
+    max_frames = min(10, len(df))
+    frames = []
+    step = max(1, len(df) // max_frames)
+    for i in range(1, max_frames + 1):
+        idx = i * step
+        frame_data = []
+        for plant in plants:
+            sub = df[df["Plant"] == plant].iloc[:idx]
+            frame_data.append(go.Scatter(x=sub["Date"], y=sub[value_col], mode='lines+markers'))
+        frames.append(go.Frame(data=frame_data))
+    fig.frames = frames
+    return fig
+
+def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    groups = sorted(df[group_col].unique())
+    fig = go.Figure()
+    for i, group in enumerate(groups):
+        sub = df[df[group_col] == group]
+        for j, plant in enumerate(sub["Plant"]):
+            fig.add_trace(go.Bar(x=[plant], y=[0], name=f"{group} - {plant}", marker_color=colors[i % len(colors)]))
+    fig.update_layout(
+        title=title, barmode='stack',
+        updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None, {"frame": {"duration": 500}, "fromcurrent": True}])], direction="left", pad={"r": 10, "t": 87}, showactive=False, x=0.1, xanchor="right", y=1.1, yanchor="top")]
+    )
+    frames = []
+    for i in range(11):
+        frame_data = []
+        for trace in fig.data:
+            group = trace.name.split(" - ")[0]
+            plant = trace.name.split(" - ")[1]
+            full_val = df[(df[group_col] == group) & (df["Plant"] == plant)][value_col].sum()
+            val = full_val * (i / 10)
+            frame_data.append(go.Bar(x=[plant], y=[val], text=[f"{val:.1f}"] if val > 0 else [""], textposition="outside"))
+        frames.append(go.Frame(data=frame_data))
+    fig.frames = frames
+    for trace in fig.data:
+        if 'KABD' in trace.name:
+            trace.marker.color = "#FF4500"
+            trace.textfont = dict(color="#FF4500", size=16, family="Arial Black")
     return fig
 
 # ========================================
@@ -288,7 +375,7 @@ st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
 if st.sidebar.button("Logout"):
     logout()
 
-mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
+mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=3)
 theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
 theme_colors = COLOR_THEMES[theme_choice]
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
@@ -430,13 +517,13 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — CLEAN KABD, EXACT SUMS
+# ANALYTICS — BIG BOLD, EXACT ACCUM
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
     saved = list_saved_dates()
     if len(saved) < 2:
-        st.info("Need 2+ days.")
+        st.info("Need 2+ days of data.")
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -448,63 +535,48 @@ elif mode == "Analytics":
         all_df['Date'] = pd.to_datetime(all_df['Date'])
         filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
         if filtered_df.empty:
-            st.warning("No data.")
+            st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
-
+            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
-
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
-            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
-            weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
-            all_plants = filtered_df['Plant'].unique()
-            summary = pd.DataFrame({"Plant": all_plants})
+            # BIG BOLD SUMMARY
+            total_monthly = monthly_daily['Production for the Day'].sum()
+            top_plant_row = monthly_daily.loc[monthly_daily['Production for the Day'].idxmax()]
+            top_plant = top_plant_row['Plant']
+            top_value = top_plant_row['Production for the Day']
+            kabd_value = monthly_daily[monthly_daily['Plant'].str.contains('KABD', case=False, na=False)]['Production for the Day'].sum() if any(monthly_daily['Plant'].str.contains('KABD', case=False, na=False)) else 0
 
-            w_daily = weekly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
-            w_acc = weekly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
-            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
-            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
-            summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
+            st.markdown(f"""
+            <div style='text-align: center; padding: 30px; background: linear-gradient(45deg, #1a1a1a, #333); border-radius: 20px; margin: 30px 0; box-shadow: 0 0 20px rgba(255,69,0,0.5);'>
+                <h1 style='color: #FFD700; font-size: 52px; margin: 0; text-shadow: 0 0 10px #FFD700;'>TOTAL MONTHLY PRODUCTION</h1>
+                <h1 style='color: #00FF00; font-size: 72px; margin: 15px 0; text-shadow: 0 0 15px #00FF00;'>{total_monthly:,.1f} m³</h1>
+                <h2 style='color: #FF4500; font-size: 40px; margin: 20px 0;'>TOP PERFORMER: <span style='color: #FFD700;'>{top_plant}</span> — {top_value:,.1f} m³</h2>
+                <h2 style='color: {'#00FF00' if kabd_value > 400 else '#FF4500'}; font-size: 36px; text-shadow: 0 0 10px;'>KABD: {kabd_value:,.1f} m³ {'ON FIRE' if kabd_value > 400 else 'NEEDS BOOST'}</h2>
+            </div>
+            """, unsafe_allow_html=True)
 
-            m_daily = monthly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
-            m_acc = monthly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
-            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
-            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
-            summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
+            st.markdown("### Animated Monthly Production")
+            st.plotly_chart(animated_aggregated_bar(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly"), use_container_width=True, config={"staticPlot": False})
 
-            summary = summary.sort_values("Monthly Daily Total", ascending=False)
+            st.markdown("### Animated Monthly Accumulative (Final Day)")
+            st.plotly_chart(animated_aggregated_bar(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True, config={"staticPlot": False})
 
-            st.subheader(f"Weekly Production — {start_date} to {end_date}")
-            st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
-
-            st.subheader(f"Monthly Production — {start_date} to {end_date}")
-            st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Daily"), use_container_width=True)
-
-            st.subheader(f"Weekly Accumulative — {start_date} to {end_date}")
-            st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
-
-            st.subheader(f"Monthly Accumulative — {start_date} to {end_date}")
-            st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
-
-            st.markdown("### DOWNLOAD REPORT AS EXCEL")
-            excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
-            st.download_button(
-                "DOWNLOAD REPORT AS EXCEL",
-                excel,
-                file_name=f"report_{start_date}_to_{end_date}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.markdown("### Download Full Report")
+            summary_df = monthly_daily.copy()
+            summary_df = summary_df.merge(monthly_acc[['Month', 'Plant', 'Accumulative Production']], on=['Month', 'Plant'], how='left')
+            excel = generate_excel_report(summary_df, f"{start_date}_to_{end_date}")
+            st.download_button("DOWNLOAD FULL REPORT", excel, f"report_{start_date}_to_{end_date}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set GITHUB_TOKEN & GITHUB_REPO in secrets for auto-push.")
-
