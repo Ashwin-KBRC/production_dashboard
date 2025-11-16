@@ -580,18 +580,19 @@ elif mode == "Analytics":
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
+            # === PODIUM TOP 3: DAILY ===
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
             st.markdown("## TOP 3 PRODUCTION SITES")
 
-            # DAILY PODIUM
+            # === DAILY PODIUM ===
             st.markdown("### Daily Production")
             for idx in range(min(3, len(top_daily))):
                 row = top_daily.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
-                size = [36, 28, 22][idx]
-                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]
+                size = [36, 28, 22][idx]  # Font size
+                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]  # Gold, Silver, Bronze
                 align = "center" if idx == 0 else "left" if idx == 1 else "right"
                 st.markdown(
                     f"<div style='text-align:{align};'>"
@@ -605,13 +606,13 @@ elif mode == "Analytics":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # ACCUMULATIVE PODIUM
+            # === ACCUMULATIVE PODIUM ===
             st.markdown("### Accumulative Production")
             for idx in range(min(3, len(top_acc))):
                 row = top_acc.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
                 size = [36, 28, 22][idx]
-                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]
+                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]  # Deep Blue gradient
                 align = "center" if idx == 0 else "left" if idx == 1 else "right"
                 st.markdown(
                     f"<div style='text-align:{align};'>"
@@ -626,6 +627,7 @@ elif mode == "Analytics":
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.markdown("---")
 
+            # === CHARTS BELOW ===
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
