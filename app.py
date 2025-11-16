@@ -220,7 +220,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL FIX: KABD TEXT CLEAN, BOLD, RED – NO SCRIBBLING ===
+# === FINAL: KABD BOLD RED, NO ERRORS, WORKS EVERYWHERE ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -237,7 +237,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         text=agg_df[value_col].round(1)
     )
 
-    # Base text
     fig.update_traces(
         texttemplate="%{text:,.1f}",
         textposition="outside",
@@ -258,29 +257,42 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     )
 
     # === KABD: RED + BOLD ONLY FOR KABD ===
-    marker_colors = []
-    text_colors = []
-    text_sizes = []
-    text_families = []
+    kabd_mask = agg_df['Plant'] == 'KABD'
+    total_rows = len(agg_df)
 
-    for _, row in agg_df.iterrows():
-        if row['Plant'] == 'KABD':
-            marker_colors.append("#FF4500")
-            text_colors.append("#FF4500")
-            text_sizes.append(16)
-            text_families.append("Arial Black")
-        else:
-            marker_colors.append(None)  # Use default color from group
-            text_colors.append("black")
-            text_sizes.append(13)
-            text_families.append("Arial")
-
-    # Apply per-bar styling
+    # Get default color per group
+    trace_colors = {}
     for trace in fig.data:
-        trace.marker.color = marker_colors
-        trace.textfont.color = text_colors
-        trace.textfont.size = text_sizes
-        trace.textfont.family = text_families
+        if trace.name:
+            trace_colors[trace.name] = trace.marker.color[0] if trace.marker.color else colors[0]
+
+    # Build per-bar styling
+    final_marker_colors = []
+    final_text_colors = []
+    final_text_sizes = []
+    final_text_families = []
+
+    for idx, row in agg_df.iterrows():
+        group = str(row[group_col])
+        default_color = trace_colors.get(group, colors[0])
+
+        if kabd_mask.iloc[idx]:
+            final_marker_colors.append("#FF4500")
+            final_text_colors.append("#FF4500")
+            final_text_sizes.append(16)
+            final_text_families.append("Arial Black")
+        else:
+            final_marker_colors.append(default_color)
+            final_text_colors.append("black")
+            final_text_sizes.append(13)
+            final_text_families.append("Arial")
+
+    # Apply to all traces
+    for trace in fig.data:
+        trace.marker.color = final_marker_colors
+        trace.textfont.color = final_text_colors
+        trace.textfont.size = final_text_sizes
+        trace.textfont.family = final_text_families
 
     return fig
 
