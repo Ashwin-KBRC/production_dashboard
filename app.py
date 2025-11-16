@@ -134,9 +134,9 @@ def load_saved(date_str: str) -> pd.DataFrame:
     if not p.exists():
         raise FileNotFoundError(f"File not found: {date_str}")
     df = pd.read_csv(p)
-    # Ensure 'Date' column exists and is consistent
-    if 'Date' not in df.columns:
-        df['Date'] = date_str
+    # CRITICAL: Remove 'Date' column to prevent duplication on rerun/theme change
+    if 'Date' in df.columns:
+        df = df.drop(columns=['Date'])
     return df
 
 def delete_saved(date_str: str) -> bool:
@@ -262,7 +262,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         text=agg_df[value_col].round(1).apply(lambda x: f"{x:,.0f}")
     )
 
-    # === BIG, BOLD, WHITE TEXT INSIDE BARS ===
+    # BIG, BOLD, WHITE TEXT INSIDE BARS
     fig.update_traces(
         texttemplate="%{text}",
         textposition="inside",
@@ -285,7 +285,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         showlegend=True
     )
 
-    # === KABD = BOLD RED & BIGGER TEXT ===
+    # KABD = BOLD RED & BIGGER TEXT
     current_idx = 0
     for trace in fig.data:
         group_key = str(trace.name)
@@ -448,7 +448,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL — FIXED
+# VIEW HISTORICAL — THEME-PROOF
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -456,7 +456,6 @@ elif mode == "View Historical Data":
     if not saved_list:
         st.info("No data.")
     else:
-        # Default to latest date
         default_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
         selected_date = st.date_input("Select date", value=default_date)
         selected_str = selected_date.strftime("%Y-%m-%d")
@@ -471,13 +470,13 @@ elif mode == "View Historical Data":
             st.error(f"Failed to load {selected_str}: {e}")
             st.stop()
 
-        # Filter out TOTAL rows and ensure correct data
-        df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-        df_hist_disp = safe_numeric(df_hist_disp)
-
-        # Remove 'Date' column from display if it exists
+        # Final safety: no 'Date' column
+        df_hist_disp = df_hist.copy()
         if 'Date' in df_hist_disp.columns:
             df_hist_disp = df_hist_disp.drop(columns=['Date'])
+
+        df_hist_disp = df_hist_disp[~df_hist_disp["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        df_hist_disp = safe_numeric(df_hist_disp)
 
         st.subheader(f"Data for **{selected_str}**")
         st.dataframe(df_hist_disp, use_container_width=True)
@@ -535,7 +534,7 @@ elif mode == "Manage Data":
                 if st.button("Download", key=f"dl_{date_str}"):
                     try:
                         df = load_saved(date_str)
-                        excel = generate_excel_report(df.drop(columns=['Date'], errors='ignore'), date_str)
+                        excel = generate_excel_report(df, date_str)
                         st.download_button(
                             label="Download",
                             data=excel,
@@ -600,13 +599,13 @@ elif mode == "Analytics":
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
-            # === OVERALL TOTALS ===
+            # OVERALL TOTALS
             overall_daily = summary['Monthly Daily Total'].sum()
             overall_acc = summary['Monthly Accumulative'].sum()
 
             st.markdown("## TOP 3 PRODUCTION SITES")
 
-            # === CSS STYLE ===
+            # CSS STYLE
             st.markdown("""
             <style>
             .overall-card {
@@ -644,7 +643,7 @@ elif mode == "Analytics":
             </style>
             """, unsafe_allow_html=True)
 
-            # === OVERALL ROW (2 BOXES) ===
+            # OVERALL ROW
             st.markdown("### Overall Performance")
             overall_cols = st.columns(2)
             with overall_cols[0]:
@@ -670,7 +669,7 @@ elif mode == "Analytics":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # === DAILY PODIUM ===
+            # DAILY PODIUM
             st.markdown("### Daily Production")
             podium_cols = st.columns(3)
             colors_daily = ["#FFD700", "#C0C0C0", "#CD7F32"]
@@ -696,7 +695,7 @@ elif mode == "Analytics":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # === ACCUMULATIVE PODIUM ===
+            # ACCUMULATIVE PODIUM
             st.markdown("### Accumulative Production")
             podium_cols_acc = st.columns(3)
             colors_acc = ["#1E90FF", "#4682B4", "#5F9EA0"]
@@ -723,7 +722,7 @@ elif mode == "Analytics":
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.markdown("---")
 
-            # === CHARTS BELOW ===
+            # CHARTS BELOW
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
