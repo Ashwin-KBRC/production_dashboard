@@ -44,19 +44,31 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# THEMES
+# THEMES & GRADIENT PALETTES
 # ========================================
 COLOR_THEMES = {
-    "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
-    "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95", "#F1A340", "#E76F51", "#D15B8A", "#9F5DBB", "#5F5290"],
-    "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3", "#3A9D9D", "#54B5B2", "#7FCEB1", "#A9EBAF", "#D1F4B7"],
-    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40", "#CC0000", "#0000CC", "#00CC00", "#CC6600", "#CCCC00"],
-    "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8", "#1A237E", "#303F9F", "#512DA8", "#8E24AA", "#AB47BC"],
-    "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684", "#D8A08D", "#B6C8A9", "#9DB99A", "#82A98B", "#669A7A"],
-    "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
-    "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],
-    "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],
+    "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
+    "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
+    "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
+    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40"],
+    "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8"],
+    "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684"],
+    "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA"],
+    "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB"],
+    "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F"],
 }
+
+# Gradient palettes for weeks/months
+WEEKLY_PALETTES = [
+    ["#FF6B6B", "#FF8E8E", "#FFB3B3", "#FFD1D1"],
+    ["#4ECDC4", "#7FE0D8", "#A8E6E0", "#D1F2EF"],
+    ["#45B7D1", "#6DC8E0", "#96D9F0", "#BFE9FF"],
+    ["#96CEB4", "#B8E0D2", "#D9F2E9", "#F0F8F7"],
+    ["#D4A5A5", "#E8C1C1", "#F5D8D8", "#FAE8E8"],
+    ["#9B59B6", "#BB8FCE", "#D7BDE2", "#E8DAEF"],
+    ["#3498DB", "#5DADE2", "#85C1E2", "#AED6F1"],
+    ["#F1C40F", "#F4D03F", "#F7DC6F", "#F9E79F"],
+]
 
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Modern Slate"
@@ -220,19 +232,26 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL: NO ERRORS, KABD BOLD RED, CLEAN TEXT ===
-def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+# === FINAL: UNIQUE GRADIENT PER WEEK/MONTH + KABD RED ===
+def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
     agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
     agg_df = agg_df.sort_values([group_col, value_col], ascending=[True, False])
+
+    # Assign unique gradient palette per group
+    unique_groups = agg_df[group_col].unique()
+    palette_map = {}
+    for i, group in enumerate(unique_groups):
+        palette = WEEKLY_PALETTES[i % len(WEEKLY_PALETTES)]
+        palette_map[group] = palette
 
     fig = px.bar(
         agg_df,
         x="Plant",
         y=value_col,
         color=group_col,
-        color_discrete_sequence=colors,
+        color_discrete_map={g: palette_map[g][0] for g in unique_groups},
         title=title,
         text=agg_df[value_col].round(1)
     )
@@ -256,51 +275,42 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         bargap=0.2
     )
 
-    # === KABD: RED + BOLD ONLY FOR KABD ===
-    kabd_mask = agg_df['Plant'] == 'KABD'
-    total_rows = len(agg_df)
-
-    # Map group to its default color
-    group_to_color = {}
-    for trace in fig.data:
-        if trace.name:
-            group_to_color[trace.name] = trace.marker.color[0] if isinstance(trace.marker.color, list) and trace.marker.color else colors[0]
-
-    # Build per-bar styling
-    marker_colors = []
-    text_colors = []
-    text_sizes = []
-    text_families = []
-
-    for idx, row in agg_df.iterrows():
-        group_key = str(row[group_col])
-        default_color = group_to_color.get(group_key, colors[0])
-
-        if kabd_mask.iloc[idx]:
-            marker_colors.append("#FF4500")
-            text_colors.append("#FF4500")
-            text_sizes.append(16)
-            text_families.append("Arial Black")
-        else:
-            marker_colors.append(default_color)
-            text_colors.append("black")
-            text_sizes.append(13)
-            text_families.append("Arial")
-
-    # === APPLY STYLING TO EACH TRACE INDIVIDUALLY ===
+    # Apply gradient + KABD red
     current_idx = 0
     for trace in fig.data:
+        group = trace.name
+        palette = palette_map[group]
         trace_len = len(trace.x)
-        trace.marker.color = marker_colors[current_idx:current_idx + trace_len]
-        trace.textfont.color = text_colors[current_idx:current_idx + trace_len]
-        trace.textfont.size = text_sizes[current_idx:current_idx + trace_len]
-        trace.textfont.family = text_families[current_idx:current_idx + trace_len]
+        colors = []
+        text_colors = []
+        text_sizes = []
+        text_families = []
+
+        for j in range(trace_len):
+            plant = trace.x[j]
+            idx = current_idx + j
+            if agg_df.iloc[idx]['Plant'] == 'KABD':
+                colors.append("#FF4500")
+                text_colors.append("#FF4500")
+                text_sizes.append(16)
+                text_families.append("Arial Black")
+            else:
+                grad_idx = j % len(palette)
+                colors.append(palette[grad_idx])
+                text_colors.append("black")
+                text_sizes.append(13)
+                text_families.append("Arial")
+
+        trace.marker.color = colors
+        trace.textfont.color = text_colors
+        trace.textfont.size = text_sizes
+        trace.textfont.family = text_families
         current_idx += trace_len
 
     return fig
 
 # ========================================
-# DATA HELPERS — PRESERVE ACCUMULATIVE
+# DATA HELPERS
 # ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -434,7 +444,7 @@ if mode == "Upload New Data":
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
-    saved_list  = list_saved_dates()
+    saved_list = list_saved_dates()
     if not saved_list:
         st.info("No data.")
     else:
@@ -517,7 +527,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — .last() FOR ACCUMULATIVE
+# ANALYTICS — GRADIENT PER WEEK/MONTH
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -567,7 +577,7 @@ elif mode == "Analytics":
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
-            st.markdown("**Note**: Accumulative charts show the **latest reported value** per plant in each period.")
+            st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
