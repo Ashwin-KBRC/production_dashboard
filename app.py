@@ -16,7 +16,7 @@ import xlsxwriter
 # ========================================
 # PAGE CONFIG & SETUP
 # ========================================
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
+st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Fire")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
@@ -180,16 +180,14 @@ def clean_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: li
     df = df.sort_values(value_col, ascending=False)
 
     fig = go.Figure()
-    for i, plant in enumerate(df["Plant"]):
-        val = df[df["Plant"] == plant][value_col].sum()
-        group = df[df["Plant"] == plant][group_col].iloc[0] if group_col in df.columns else ""
+    for i, plant in enumerate(df["Plant"].unique()):
+        sub = df[df["Plant"] == plant]
+        val = sub[value_col].sum()
+        group = sub[group_col].iloc[0] if group_col in sub.columns else ""
         fig.add_trace(go.Bar(
-            x=[plant],
-            y=[val],
-            name=f"{group} - {plant}",
+            x=[plant], y=[val], name=f"{group} - {plant}",
             marker_color=colors[i % len(colors)],
-            text=f"{val:,.1f}",
-            textposition="outside",
+            text=f"{val:,.1f}", textposition="outside",
             textfont=dict(size=16, family="Arial Black", color="white"),
             marker=dict(line=dict(width=3, color="white"))
         ))
@@ -215,7 +213,6 @@ def clean_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: li
         )
     )
 
-    # Highlight KABD
     for trace in fig.data:
         if 'KABD' in trace.name.upper():
             trace.marker.color = "#FF4500"
@@ -374,7 +371,7 @@ elif mode == "Manage Data":
                     st.download_button("Download", excel, f"{date_str}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_btn_{date_str}")
 
 # ========================================
-# ANALYTICS — FINAL, CLEAN, CORRECT
+# ANALYTICS — FINAL FIX: ACCUMULATIVE = MAX DATE IN PERIOD
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -403,9 +400,23 @@ elif mode == "Analytics":
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
 
-            # ACCUMULATIVE = FINAL DAY ONLY
-            monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
-            weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
+            # === ACCUMULATIVE = FINAL DAY OF PERIOD (MAX DATE) ===
+            monthly_max_dates = filtered_df.groupby(['Month', 'Plant'])['Date'].max().reset_index()
+            weekly_max_dates = filtered_df.groupby(['Custom_Week', 'Plant'])['Date'].max().reset_index()
+
+            monthly_acc = pd.merge(
+                filtered_df[['Date', 'Month', 'Plant', 'Accumulative Production']],
+                monthly_max_dates,
+                on=['Month', 'Plant', 'Date'],
+                how='inner'
+            )[['Month', 'Plant', 'Accumulative Production']]
+
+            weekly_acc = pd.merge(
+                filtered_df[['Date', 'Custom_Week', 'Plant', 'Accumulative Production']],
+                weekly_max_dates,
+                on=['Custom_Week', 'Plant', 'Date'],
+                how='inner'
+            )[['Custom_Week', 'Plant', 'Accumulative Production']]
 
             # MAIN BOX: FILTER UNDERPERFORMERS
             total_by_plant = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
@@ -422,8 +433,8 @@ elif mode == "Analytics":
             <div style='text-align: center; padding: 30px; background: linear-gradient(45deg, #1a1a1a, #333); border-radius: 20px; margin: 30px 0; box-shadow: 0 0 20px rgba(255,69,0,0.5);'>
                 <h1 style='color: #FFD700; font-size: 52px; margin: 0; text-shadow: 0 0 10px #FFD700;'>TOTAL MONTHLY PRODUCTION</h1>
                 <h1 style='color: #00FF00; font-size: 72px; margin: 15px 0; text-shadow: 0 0 15px #00FF00;'>{total_monthly:,.1f} m³</h1>
-                <h2 style='color: #FF4500; font-size: 40px; margin: 20px 0;'>TOP PERFORMER: <span style='color: #FFD700;'>{top_plant}</span> — {top_value:,.1f} m³</h2>
-                {f'<h2 style=\"color: {"#00FF00" if kabd_value > 400 else "#FF4500"}; font-size: 36px; text-shadow: 0 0 10px;\">KABD: {kabd_value:,.1f} m³ {"ON FIRE" if kabd_value > 400 else "NEEDS BOOST"}</h2>' if kabd_value > 0 else ''}
+                <h2 style='color: #FF4500; font-size: 40px; margin: 20px 0;'>TOP: <span style='color: #FFD700;'>{top_plant}</span> — {top_value:,.1f} m³</h2>
+                {f'<h2 style=\"color: {"#00FF00" if kabd_value > 400 else "#FF4500"}; font-size: 36px;\">KABD: {kabd_value:,.1f} m³ {"ON FIRE" if kabd_value > 400 else "NEEDS BOOST"}</h2>' if kabd_value > 0 else ''}
             </div>
             """, unsafe_allow_html=True)
 
@@ -442,7 +453,7 @@ elif mode == "Analytics":
 
             st.markdown("### Download Full Report")
             summary_df = monthly_daily.copy()
-            summary_df = summary_df.merge(monthly_acc[['Month', 'Plant', 'Accumulative Production']], on=['Month', 'Plant'], how='left')
+            summary_df = summary_df.merge(monthly_acc, on=['Month', 'Plant'], how='left')
             excel = generate_excel_report(summary_df, f"{start_date}_to_{end_date}")
             st.download_button("DOWNLOAD FULL REPORT", excel, f"report_{start_date}_to_{end_date}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -451,4 +462,4 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set GITHUB_TOKEN & GITHUB_REPO in secrets for auto-push.")
-st.sidebar.caption("Kuwait Time: 09:33 AM | Dashboard LIVE")
+st.sidebar.caption("Kuwait Time: 09:50 AM | Dashboard LIVE")
