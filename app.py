@@ -61,7 +61,6 @@ COLOR_THEMES = {
     "Arctic Ice": ["#00CED1", "#48D1CC", "#40E0D0", "#AFEEEE", "#E0FFFF"],
 }
 
-# Gradient palettes for weeks/months
 WEEKLY_PALETTES = [
     ["#FF6B6B", "#FF8E8E", "#FFB3B3", "#FFD1D1"],
     ["#4ECDC4", "#7FE0D8", "#A8E6E0", "#D1F2EF"],
@@ -235,7 +234,6 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL: UNIQUE GRADIENT + KABD RED + NO KeyError ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -532,7 +530,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — TOP 3 SAFE + GRADIENT
+# ANALYTICS — PODIUM TOP 3 + ACCUMULATIVE
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -582,25 +580,52 @@ elif mode == "Analytics":
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
-            # === TOP 3 DAILY & ACCUMULATIVE — SAFE INDEXING ===
-            top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']]
-            top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']]
+            top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
+            top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
-            st.markdown("## **TOP 3 PRODUCTION SITES**")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### **Daily Production**")
-                ranks = ["**1st**", "**2nd**", "**3rd**"]
-                for i, row in top_daily.iterrows():
-                    rank = ranks[i] if i < len(ranks) else f"**{i+1}th**"
-                    st.markdown(f"<h2 style='color:#FF4500;'>{rank} → **{row['Plant']}**: `{row['Monthly Daily Total']:,.1f} m³`</h2>", unsafe_allow_html=True)
-            with col2:
-                st.markdown("### **Accumulative Production**")
-                for i, row in top_acc.iterrows():
-                    rank = ranks[i] if i < len(ranks) else f"**{i+1}th**"
-                    st.markdown(f"<h2 style='color:#1E90FF;'>{rank} → **{row['Plant']}**: `{row['Monthly Accumulative']:,.1f} m³`</h2>", unsafe_allow_html=True)
+            st.markdown("## TOP 3 PRODUCTION SITES")
+
+            # DAILY PODIUM
+            st.markdown("### Daily Production")
+            for idx in range(min(3, len(top_daily))):
+                row = top_daily.iloc[idx]
+                rank = ["1st", "2nd", "3rd"][idx]
+                size = [36, 28, 22][idx]
+                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]
+                align = "center" if idx == 0 else "left" if idx == 1 else "right"
+                st.markdown(
+                    f"<div style='text-align:{align};'>"
+                    f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:5px 0;'>"
+                    f"**{rank}** → **{row['Plant']}**<br>"
+                    f"<span style='font-size:{size-6}px;'>{row['Monthly Daily Total']:,.1f} m³</span>"
+                    f"</h{6-idx}>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # ACCUMULATIVE PODIUM
+            st.markdown("### Accumulative Production")
+            for idx in range(min(3, len(top_acc))):
+                row = top_acc.iloc[idx]
+                rank = ["1st", "2nd", "3rd"][idx]
+                size = [36, 28, 22][idx]
+                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]
+                align = "center" if idx == 0 else "left" if idx == 1 else "right"
+                st.markdown(
+                    f"<div style='text-align:{align};'>"
+                    f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:5px 0;'>"
+                    f"**{rank}** → **{row['Plant']}**<br>"
+                    f"<span style='font-size:{size-6}px;'>{row['Monthly Accumulative']:,.1f} m³</span>"
+                    f"</h{6-idx}>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
 
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
+            st.markdown("---")
+
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
