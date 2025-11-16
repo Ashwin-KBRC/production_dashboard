@@ -220,11 +220,13 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
+# === FIXED: KABD text is clean, bold, red, no scribbling ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
     agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
     agg_df = agg_df.sort_values(value_col, ascending=False)
+
     fig = px.bar(
         agg_df,
         x="Plant",
@@ -237,7 +239,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
     fig.update_traces(
         texttemplate="%{text:,.1f}",
         textposition="outside",
-        textfont=dict(size=16, color="black", family="Arial"),
+        textfont=dict(size=14, color="black", family="Arial"),
         cliponaxis=False,
         textangle=0
     )
@@ -251,13 +253,19 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
         xaxis_tickfont=dict(size=13),
         yaxis_tickfont=dict(size=12)
     )
+
+    # === KABD: Highlight only its bar and text ===
     for trace in fig.data:
-        if 'KABD' in trace.name:
-            trace.marker.color = "#FF4500"
-            trace.textfont.color = "#FF4500"
-            trace.textfont.size = 16
-            trace.textfont.family = "Arial Black"
+        if trace.name and 'KABD' in trace.name:
+            kabd_mask = agg_df['Plant'] == 'KABD'
+            if kabd_mask.any():
+                trace.marker.color = "#FF4500"
+                trace.textfont.color = "#FF4500"
+                trace.textfont.size = 16
+                trace.textfont.family = "Arial Black"
+                trace.textposition = "outside"
             break
+
     return fig
 
 # ========================================
@@ -265,11 +273,8 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, color
 # ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
-    # Only clean daily production
     df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
-    # Preserve real accumulative values — only coerce, no fill
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
-    # Optional: forward fill only if logical (e.g., same plant), but keep original
     df2["Accumulative Production"] = df2["Accumulative Production"].fillna(method='ffill').fillna(0)
     return df2
 
@@ -516,7 +521,6 @@ elif mode == "Analytics":
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
 
-            # Use .last() to get latest accumulative value per period
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
