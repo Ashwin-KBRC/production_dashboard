@@ -317,7 +317,7 @@ def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, co
     if df.empty:
         return go.Figure().add_annotation(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     df[value_col] = df[value_col].astype('float64')
-903    groups = sorted(df[group_col].unique())
+    groups = sorted(df[group_col].unique())  # FIXED: REMOVED 903
     fig = go.Figure()
     for i, group in enumerate(groups):
         sub = df[df[group_col] == group]
