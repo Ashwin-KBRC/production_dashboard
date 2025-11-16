@@ -44,7 +44,7 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# THEMES & GRADIENT PALETTES
+# THEMES — ADDED: Lava Flow + Desert Storm + Arctic Ice
 # ========================================
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
@@ -56,6 +56,10 @@ COLOR_THEMES = {
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA"],
     "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB"],
     "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F"],
+    # === NEW THEMES ===
+    "Lava Flow": ["#FF4500", "#FF6B35", "#FF8E53", "#FFB347", "#FFD700"],
+    "Desert Storm": ["#8B4513", "#D2691E", "#CD853F", "#DEB887", "#F4A460"],
+    "Arctic Ice": ["#00CED1", "#48D1CC", "#40E0D0", "#AFEEEE", "#E0FFFF"],
 }
 
 # Gradient palettes for weeks/months
@@ -232,21 +236,19 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# === FINAL: UNIQUE GRADIENT PER WEEK/MONTH + KABD RED + NO KeyError ===
+# === FINAL: UNIQUE GRADIENT + KABD RED + NO KeyError ===
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
     agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
     agg_df = agg_df.sort_values([group_col, value_col], ascending=[True, False])
 
-    # Assign unique gradient palette per group
     unique_groups = agg_df[group_col].unique()
     palette_map = {}
     for i, group in enumerate(unique_groups):
         palette = WEEKLY_PALETTES[i % len(WEEKLY_PALETTES)]
-        palette_map[str(group)] = palette  # Ensure string key
+        palette_map[str(group)] = palette
 
-    # Create color map for initial trace (one color per group)
     color_discrete_map = {str(g): palette_map[str(g)][0] for g in unique_groups}
 
     fig = px.bar(
@@ -278,12 +280,11 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         bargap=0.2
     )
 
-    # Apply gradient + KABD red
     current_idx = 0
     for trace in fig.data:
-        group_key = str(trace.name)  # Ensure string
+        group_key = str(trace.name)
         if group_key not in palette_map:
-            continue  # Safety
+            continue
         palette = palette_map[group_key]
         trace_len = len(trace.x)
         colors = []
@@ -477,7 +478,7 @@ elif mode == "View Historical Data":
         st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
         st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
+        st.plotly_chart(area tallest(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
 
         st.markdown("#### Accumulative Production — From Saved File")
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
@@ -532,7 +533,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — GRADIENT PER WEEK/MONTH
+# ANALYTICS — TOP 3 + GRADIENT
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -581,6 +582,23 @@ elif mode == "Analytics":
             summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
+
+            # === TOP 3 DAILY & ACCUMULATIVE ===
+            top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']]
+            top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']]
+
+            st.markdown("## **TOP 3 PRODUCTION SITES**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### **Daily Production**")
+                for i, row in top_daily.iterrows():
+                    rank = ["**1st**", "**2nd**", "**3rd**"][i]
+                    st.markdown(f"{rank} → **{row['Plant']}**: `{row['Monthly Daily Total']:,.1f} m³`")
+            with col2:
+                st.markdown("### **Accumulative Production**")
+                for i, row in top_acc.iterrows():
+                    rank = ["**1st**", "**2nd**", "**3rd**"][i]
+                    st.markdown(f"{rank} → **{row['Plant']}**: `{row['Monthly Accumulative']:,.1f} m³`")
 
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
