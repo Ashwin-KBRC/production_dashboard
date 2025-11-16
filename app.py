@@ -4,33 +4,24 @@ import base64
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 import io
 import xlsxwriter
-import logging
 
 # ========================================
-# CONFIGURATION & LOGGING
+# PAGE CONFIG & SETUP
 # ========================================
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Fire")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ========================================
-# PATHS & CONSTANTS
-# ========================================
+st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
-MAX_FILE_AGE_DAYS = 365
 
 # ========================================
-# SECRETS & AUTHENTICATION
+# SECRETS & AUTH
 # ========================================
 SECRETS = {}
 try:
@@ -53,7 +44,7 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# COLOR THEMES — LAVA FLOW DEFAULT
+# THEMES
 # ========================================
 COLOR_THEMES = {
     "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9", "#6B7280", "#9CA3AF", "#D1D5DB", "#E5E7EB", "#F9FAFB"],
@@ -65,93 +56,78 @@ COLOR_THEMES = {
     "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA", "#333333", "#172F6E", "#B38600", "#6E6E6E", "#8CAFE6"],
     "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB", "#1F2F4B", "#357ABD", "#9BAEBF", "#A6A6A6", "#6BAED6"],
     "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F", "#ECECEC", "#006666", "#660000", "#B0B0B0", "#B27A3D"],
-    "Lava Flow": ["#FF4500", "#FF6B35", "#F7931E", "#FFD23F", "#FF8C00", "#1A1A1A", "#FF5733", "#FFC300", "#FF5733", "#DAF7A6"],
-    "Neon Pulse": ["#00FF00", "#00FFFF", "#FF00FF", "#FFFF00", "#00FF7F", "#1E1E1E", "#39FF14", "#00CED1", "#FF1493", "#FFD700"],
-    "Gold Standard": ["#FFD700", "#FFA500", "#DAA520", "#B8860B", "#CD7F32", "#2F2F2F", "#FFCC00", "#FF9900", "#CC9900", "#996600"],
 }
 if "theme" not in st.session_state:
-    st.session_state["theme"] = "Lava Flow"
+    st.session_state["theme"] = "Modern Slate"
 elif st.session_state["theme"] not in COLOR_THEMES:
-    st.session_state["theme"] = "Lava Flow"
+    st.session_state["theme"] = "Modern Slate"
 
 # ========================================
-# AUTHENTICATION FUNCTIONS
+# AUTH FUNCTIONS
 # ========================================
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
 
 def check_credentials(username: str, password: str) -> bool:
-    """Validate user credentials."""
-    if not username or not password:
+    if not username:
         return False
     user = username.strip()
-    return user in USERS and hash_password(password) == USERS[user]
+    if user in USERS:
+        return hash_password(password) == USERS[user]
+    return False
 
 def login_ui():
-    """Display login form in sidebar."""
-    st.sidebar.subheader("Login Required")
+    st.sidebar.subheader("Login")
     with st.sidebar.form("login_form"):
         username = st.text_input("Username", key="login_user")
         password = st.text_input("Password", type="password", key="login_pwd")
-        submitted = st.form_submit_button("Sign In")
+        submitted = st.form_submit_button("Sign in")
         if submitted:
             if check_credentials(username, password):
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = username.strip()
-                st.success("Login successful!")
                 st.rerun()
             else:
                 st.sidebar.error("Invalid username or password")
 
 def logout():
-    """Clear session and log out."""
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    if "logged_in" in st.session_state:
+        del st.session_state["logged_in"]
+    if "username" in st.session_state:
+        del st.session_state["username"]
     st.rerun()
 
 def logged_in() -> bool:
-    """Check if user is logged in."""
     return st.session_state.get("logged_in", False)
 
 # ========================================
 # FILE I/O & GIT HELPERS
 # ========================================
 def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False) -> Path:
-    """Save DataFrame to CSV with date-based filename."""
     fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
     p = DATA_DIR / fname
     if p.exists() and not overwrite:
-        raise FileExistsError(f"File {fname} already exists. Use overwrite=True.")
+        raise FileExistsError(f"{fname} already exists.")
     df.to_csv(p, index=False, float_format="%.3f")
-    logger.info(f"Saved data to {p}")
     return p
 
 def list_saved_dates() -> List[str]:
-    """List all saved dates in descending order."""
-    files = [p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv")]
-    return sorted(files, reverse=True)
+    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv")], reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
-    """Load CSV data for a specific date."""
     p = DATA_DIR / f"{date_str}.csv"
     if not p.exists():
-        raise FileNotFoundError(f"Data not found for {date_str}")
-    df = pd.read_csv(p)
-    df['Date'] = pd.to_datetime(df['Date']).dt.date
-    return df
+        raise FileNotFoundError(f"File not found: {date_str}")
+    return pd.read_csv(p)
 
 def delete_saved(date_str: str) -> bool:
-    """Delete a saved CSV file."""
     p = DATA_DIR / f"{date_str}.csv"
     if p.exists():
         p.unlink()
-        logger.info(f"Deleted {p}")
         return True
     return False
 
 def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
-    """Push file to GitHub if credentials provided."""
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return False, "GitHub not configured."
     try:
@@ -162,258 +138,227 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         resp = requests.get(url, headers=headers)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
-        payload = {
-            "message": msg,
-            "content": b64,
-            "branch": "main",
-            "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}
-        }
-        if sha:
-            payload["sha"] = sha
+        payload = {"message": msg, "content": b64, "branch": "main", "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}}
+        if sha: payload["sha"] = sha
         r = requests.put(url, headers=headers, json=payload)
         return r.status_code in [200, 201], ("Success" if r.ok else r.json().get("message", "Failed"))
     except Exception as e:
-        logger.error(f"Git push failed: {e}")
         return False, str(e)
 
 # ========================================
-# DATA PROCESSING HELPERS
+# PLOT HELPERS — CLEAN LABELS, EXACT VALUES
+# ========================================
+def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
+    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
+    fig.update_layout(title_font=dict(family="Arial", size=18), legend_font=dict(size=16), margin=dict(t=60, b=40, l=40, r=40))
+    return fig
+
+def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title,
+                 text=df[value_col].round(1))
+    fig.update_traces(
+        texttemplate="%{text:,.1f}",
+        textposition="outside",
+        textfont=dict(size=16, color="black", family="Arial"),
+        cliponaxis=False,
+        textangle=0
+    )
+    fig.update_layout(
+        title_font=dict(size=18),
+        margin=dict(t=60, b=280, l=60, r=40),
+        xaxis_tickangle=0,
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0",
+        xaxis_tickfont=dict(size=13),
+        yaxis_tickfont=dict(size=12)
+    )
+    return fig
+
+def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    df[value_col] = df[value_col].astype('float64')
+    agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
+    agg_df = agg_df.sort_values(value_col, ascending=False)
+    fig = px.bar(
+        agg_df,
+        x="Plant",
+        y=value_col,
+        color=group_col,
+        color_discrete_sequence=colors,
+        title=title,
+        text=agg_df[value_col].round(1)
+    )
+    fig.update_traces(
+        texttemplate="%{text:,.1f}",
+        textposition="outside",
+        textfont=dict(size=16, color="black", family="Arial"),
+        cliponaxis=False,
+        textangle=0
+    )
+    fig.update_layout(
+        title_font=dict(size=18),
+        legend_font=dict(size=14),
+        margin=dict(t=70, b=280, l=60, r=40),
+        xaxis_tickangle=0,
+        xaxis_gridcolor="#E0E0E0",
+        yaxis_gridcolor="#E0E0E0",
+        xaxis_tickfont=dict(size=13),
+        yaxis_tickfont=dict(size=12)
+    )
+    for trace in fig.data:
+        if 'KABD' in trace.name:
+            trace.marker.color = "#FF4500"
+            trace.textfont.color = "#FF4500"
+            trace.textfont.size = 16
+            trace.textfont.family = "Arial Black"
+            break
+    return fig
+
+# ========================================
+# DATA HELPERS
 # ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert production columns to numeric with error handling."""
-    df = df.copy()
-    df["Production for the Day"] = pd.to_numeric(df["Production for the Day"], errors="coerce").fillna(0.0)
-    df["Accumulative Production"] = pd.to_numeric(df["Accumulative Production"], errors="coerce").fillna(0.0)
-    return df
+    df2 = df.copy()
+    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
+    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce").fillna(0.0)
+    return df2
 
-def generate_excel_report(df: pd.DataFrame, date_str: str) -> io.BytesIO:
-    """Generate Excel report in memory."""
+def generate_excel_report(df: pd.DataFrame, date_str: str):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
-        workbook = writer.book
-        worksheet = writer.sheets['Production Data']
-        format_bold = workbook.add_format({'bold': True, 'font_color': '#FFD700'})
-        worksheet.set_column('A:D', 20, format_bold)
     output.seek(0)
     return output
 
 # ========================================
-# CHART: CLEAN STATIC BAR — BOLD & PROFESSIONAL
-# ========================================
-def clean_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
-    """Generate clean, bold, static bar chart."""
-    if df.empty or value_col not in df.columns:
-        fig = go.Figure()
-        fig.add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-                           font=dict(size=20, color="white"))
-        fig.update_layout(title=title, title_font=dict(size=22, family="Arial Black", color="#FFD700"),
-                          plot_bgcolor="#1a1a1a", paper_bgcolor="#111")
-        return fig
-
-    df = df.copy()
-    df[value_col] = df[value_col].astype('float64')
-    df = df.sort_values(value_col, ascending=False)
-
-    fig = go.Figure()
-    for i, plant in enumerate(df["Plant"].unique()):
-        sub = df[df["Plant"] == plant]
-        val = sub[value_col].sum()
-        group = sub[group_col].iloc[0] if group_col in sub.columns and not sub[group_col].empty else ""
-        fig.add_trace(go.Bar(
-            x=[plant], y=[val], name=f"{group} - {plant}",
-            marker_color=colors[i % len(colors)],
-            text=f"{val:,.1f}", textposition="outside",
-            textfont=dict(size=16, family="Arial Black", color="white"),
-            marker=dict(line=dict(width=3, color="white"))
-        ))
-
-    fig.update_layout(
-        title=title,
-        title_font=dict(size=22, family="Arial Black", color="#FFD700"),
-        barmode='stack',
-        plot_bgcolor="#1a1a1a",
-        paper_bgcolor="#111111",
-        font=dict(color="white", size=14, family="Arial"),
-        legend=dict(font=dict(size=14, family="Arial Black"), bgcolor="#333", bordercolor="#FFD700", borderwidth=1),
-        margin=dict(t=100, b=100, l=80, r=80),
-        xaxis=dict(
-            title="Plant", title_font=dict(size=18, family="Arial Black"),
-            tickfont=dict(size=14, family="Arial Black"), gridcolor="#444"
-        ),
-        yaxis=dict(
-            title="m³", title_font=dict(size=18, family="Arial Black"),
-            tickfont=dict(size=14, family="Arial"), gridcolor="#444"
-        )
-    )
-
-    # Highlight KABD
-    for trace in fig.data:
-        if 'KABD' in trace.name.upper():
-            trace.marker.color = "#FF4500"
-            trace.textfont.color = "#FFD700"
-            trace.textfont.size = 18
-            trace.textfont.family = "Arial Black"
-
-    return fig
-
-# ========================================
-# LOGIN VALIDATION
+# LOGIN CHECK
 # ========================================
 if not logged_in():
-    st.title("Production Dashboard — Login Required")
+    st.title("Production Dashboard — Login required")
     login_ui()
     st.sidebar.write("---")
-    st.sidebar.caption("Contact admin for credentials.")
+    st.sidebar.caption("If you don't have credentials, please contact the admin.")
     st.stop()
 
 # ========================================
-# MAIN UI & SIDEBAR
+# MAIN UI
 # ========================================
-st.sidebar.title("Dashboard Controls")
-st.sidebar.write(f"**Logged in as:** {st.session_state.get('username', 'User')}")
-if st.sidebar.button("Logout", use_container_width=True):
+st.sidebar.title("Controls")
+st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
+if st.sidebar.button("Logout"):
     logout()
 
-mode = st.sidebar.radio("Select Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=3)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), 
-                                   index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
+mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=3)
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
 theme_colors = COLOR_THEMES[theme_choice]
-alert_threshold = st.sidebar.number_input("Alert Threshold (m³)", min_value=0.0, value=50.0, step=0.5)
+alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
 st.sidebar.markdown("---")
-st.sidebar.caption("Upload Excel: Plant | Production for the Day | Accumulative Production")
-st.title("PRODUCTION DASHBOARD")
+st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
+st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# MODE: UPLOAD NEW DATA
+# UPLOAD MODE
 # ========================================
 if mode == "Upload New Data":
-    st.header("Upload Daily Production Data")
-    uploaded = st.file_uploader("Choose Excel file (.xlsx)", type=["xlsx"])
-    selected_date = st.date_input("Date for this data", value=datetime.today())
-
+    st.header("Upload new daily production file")
+    uploaded = st.file_uploader("Upload Excel (.xlsx)", type=["xlsx"])
+    selected_date = st.date_input("Which date is this file for?", value=datetime.today())
     if uploaded:
         try:
             df_uploaded = pd.read_excel(uploaded)
             df_uploaded.columns = df_uploaded.columns.str.strip()
         except Exception as e:
-            st.error(f"Failed to read file: {e}")
+            st.error(f"Failed to read: {e}")
             st.stop()
-
         missing = [c for c in REQUIRED_COLS if c not in df_uploaded.columns]
         if missing:
-            st.error(f"Missing required columns: {', '.join(missing)}")
+            st.error(f"Missing columns: {missing}")
         else:
-            st.subheader("Data Preview")
-            st.dataframe(df_uploaded.head(20), use_container_width=True)
-
-            overwrite = st.checkbox("Overwrite existing file?", value=False)
-            confirm = st.checkbox("I confirm the data is correct and ready to save")
-
-            if confirm and st.button("Save & Upload", type="primary"):
+            st.subheader("Preview")
+            st.dataframe(df_uploaded.head(20))
+            overwrite = st.checkbox("Overwrite existing?", value=False)
+            confirm = st.checkbox("Confirm data is correct")
+            if confirm and st.button("Upload & Save"):
                 df_save = df_uploaded.copy()
                 df_save["Date"] = selected_date.strftime("%Y-%m-%d")
                 try:
                     saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
-                    st.success(f"Data saved: `{saved_path.name}`")
                 except FileExistsError as e:
                     st.error(str(e))
                     st.stop()
-
-                pushed, msg = attempt_git_push(saved_path, f"Add production data for {selected_date}")
-                if pushed:
-                    st.success(f"GitHub sync: {msg}")
-                else:
-                    st.warning(f"GitHub sync failed: {msg}")
-
+                st.success(f"Saved to {saved_path}")
+                pushed, message = attempt_git_push(saved_path, f"Add data for {selected_date}")
+                if pushed: st.success(message)
+                else: st.warning(message)
                 df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                 df_display = safe_numeric(df_display)
-
-                st.markdown("### Summary")
+                st.markdown("### Totals")
                 total_daily = df_display["Production for the Day"].sum()
                 total_acc = df_display["Accumulative Production"].sum()
-                st.write(f"- **Daily Production:** {total_daily:,.1f} m³")
-                st.write(f"- **Accumulative:** {total_acc:,.1f} m³")
-
+                st.write(f"- Daily: **{total_daily:,.1f} m³**")
+                st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
                 alerts = df_display[df_display["Production for the Day"] < alert_threshold]
                 if not alerts.empty:
-                    st.warning("Plants below threshold:")
+                    st.warning("Below threshold:")
                     for _, r in alerts.iterrows():
-                        st.write(f"• {r['Plant']}: {r['Production for the Day']:.1f} m³")
-
+                        st.write(f"- {r['Plant']}: {r['Production for the Day']:.1f} m³")
                 st.markdown("### Charts")
                 c1, c2 = st.columns(2)
                 with c1:
-                    fig_pie = px.pie(df_display, names="Plant", values="Production for the Day",
-                                     color_discrete_sequence=theme_colors, title="Production Share")
-                    fig_pie.update_traces(textinfo="percent+label", textfont_size=14)
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    st.plotly_chart(pie_chart(df_display, "Production for the Day", theme_colors, "Share"), use_container_width=True)
                 with c2:
-                    fig_bar = px.bar(df_display, x="Plant", y="Production for the Day",
-                                     color="Plant", color_discrete_sequence=theme_colors,
-                                     text=df_display["Production for the Day"].round(1))
-                    fig_bar.update_traces(texttemplate="%{text:,.1f}", textposition="outside")
-                    st.plotly_chart(fig_bar, use_container_width=True)
-
-                top_plant = df_display.loc[df_display["Production for the Day"].idxmax(), "Plant"]
-                top_value = df_display["Production for the Day"].max()
-                st.success(f"**Top Performer:** {top_plant} — {top_value:,.1f} m³")
-
+                    st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Per Plant"), use_container_width=True)
+                top = df_display.loc[df_display["Production for the Day"].idxmax()]
+                st.success(f"Top: {top['Plant']} — {top['Production for the Day']:.1f} m³")
                 excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
-                st.download_button("Download Excel Report", excel_file,
-                                   f"production_report_{selected_date}.xlsx",
-                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.download_button("Download Excel", excel_file, f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# MODE: VIEW HISTORICAL DATA
+# VIEW HISTORICAL
 # ========================================
 elif mode == "View Historical Data":
-    st.header("View Historical Production")
-    saved_dates = list_saved_dates()
-    if not saved_dates:
-        st.info("No historical data available.")
+    st.header("Historical Data Viewer")
+    saved_list = list_saved_dates()
+    if not saved_list:
+        st.info("No data.")
     else:
-        default_date = datetime.strptime(saved_dates[0], "%Y-%m-%d").date()
-        selected_date = st.date_input("Select Date", value=default_date)
-        date_str = selected_date.strftime("%Y-%m-%d")
-
-        if date_str not in saved_dates:
-            st.warning("No data for selected date.")
-        else:
-            df = load_saved(date_str)
-            df_disp = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-            df_disp = safe_numeric(df_disp)
-
-            st.subheader(f"Production Data — {date_str}")
-            st.dataframe(df_disp, use_container_width=True)
-
-            total_daily = df_disp["Production for the Day"].sum()
-            total_acc = df_disp["Accumulative Production"].sum()
-            st.markdown("### Summary")
-            st.write(f"- **Daily:** {total_daily:,.1f} m³")
-            st.write(f"- **Accumulative:** {total_acc:,.1f} m³")
-
-            st.markdown("### Visualization")
-            fig = px.bar(df_disp, x="Plant", y="Production for the Day", color="Plant",
-                         color_discrete_sequence=theme_colors, title=f"Daily Production — {date_str}")
-            st.plotly_chart(fig, use_container_width=True)
-
-            excel = generate_excel_report(df_disp, date_str)
-            st.download_button("Download Excel", excel, f"report_{date_str}.xlsx",
-                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        default_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
+        selected_date = st.date_input("Select date", value=default_date)
+        selected = selected_date.strftime("%Y-%m-%d")
+        if selected not in saved_list:
+            st.warning("No data.")
+            st.stop()
+        df_hist = load_saved(selected)
+        df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        df_hist_disp = safe_numeric(df_hist_disp)
+        st.subheader(f"Data for {selected}")
+        st.dataframe(df_hist_disp, use_container_width=True)
+        total_daily = df_hist_disp["Production for the Day"].sum()
+        total_acc = df_hist_disp["Accumulative Production"].sum()
+        st.markdown("### Totals")
+        st.write(f"- Daily: **{total_daily:,.1f} m³**")
+        st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
+        st.markdown("### Charts")
+        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
+        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily Production — {selected}"), use_container_width=True)
+        st.plotly_chart(bar_chart(df_hist_disp, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+        excel_file = generate_excel_report(df_hist_disp, selected)
+        st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# MODE: MANAGE DATA
+# MANAGE DATA
 # ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
-    saved_dates = list_saved_dates()
-    if not saved_dates:
-        st.info("No files to manage.")
+    saved_list = list_saved_dates()
+    if not saved_list:
+        st.info("No saved files.")
     else:
-        st.write(f"**{len(saved_dates)}** file(s) found:")
-        for date_str in saved_dates:
-            col1, col2, col3 = st.columns([3, 1, 1])
+        st.write(f"Found {len(saved_list)} file(s):")
+        for date_str in saved_list:
+            col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
                 st.write(f"**{date_str}**")
             with col2:
@@ -422,120 +367,116 @@ elif mode == "Manage Data":
                         st.success(f"Deleted {date_str}")
                         st.rerun()
                     else:
-                        st.error("Delete failed.")
+                        st.error("Failed to delete.")
             with col3:
                 if st.button("Download", key=f"dl_{date_str}"):
-                    df = load_saved(date_str)
-                    excel = generate_excel_report(df, date_str)
-                    st.download_button("Get File", excel, f"{date_str}.xlsx",
-                                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                       key=f"dl_btn_{date_str}")
+                    try:
+                        df = load_saved(date_str)
+                        excel = generate_excel_report(df, date_str)
+                        st.download_button(
+                            label="Download",
+                            data=excel,
+                            file_name=f"{date_str}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_btn_{date_str}"
+                        )
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
 # ========================================
-# MODE: ANALYTICS — FINAL & CORRECT
+# ANALYTICS — FINAL FIX: MONTHLY ACCUMULATIVE = FINAL DAY
 # ========================================
 elif mode == "Analytics":
-    st.header("Analytics & Performance Trends")
-    saved_dates = list_saved_dates()
-    if len(saved_dates) < 2:
-        st.info("Need at least 2 days of data for analytics.")
+    st.header("Analytics & Trends")
+    saved = list_saved_dates()
+    if len(saved) < 2:
+        st.info("Need 2+ days.")
     else:
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
-
-        # Load and filter data
-        frames = [load_saved(d) for d in saved_dates]
+        frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-
-        filtered_df = all_df[
-            (all_df['Date'] >= pd.to_datetime(start_date)) &
-            (all_df['Date'] <= pd.to_datetime(end_date))
-        ].copy()
-
+        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
         if filtered_df.empty:
-            st.warning("No data in selected date range.")
-            st.stop()
+            st.warning("No data.")
+        else:
+            filtered_df = safe_numeric(filtered_df)
+            filtered_df = filtered_df.sort_values(['Plant', 'Date'])
 
-        filtered_df = safe_numeric(filtered_df)
-        filtered_df = filtered_df.sort_values(['Plant', 'Date'])
+            # === WEEKLY: Custom week from start_date ===
+            def assign_custom_week(date, start):
+                return (date - pd.to_datetime(start)).days // 7 + 1
+            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
+            filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
-        # === MONTH: Only full months in range ===
-        filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
-        valid_months = filtered_df['Month'].unique()
+            # DAILY PRODUCTION
+            weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
+            monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
 
-        # === WEEK: Only from start_date onward ===
-        filtered_df['Custom_Week'] = ((filtered_df['Date'] - pd.to_datetime(start_date)).dt.days // 7) + 1
-        filtered_df = filtered_df[filtered_df['Custom_Week'] >= 1]
+            # === ACCUMULATIVE = FINAL DAY OF PERIOD ===
+            # Monthly: Max date in month per plant
+            monthly_max_dates = filtered_df.groupby(['Month', 'Plant'])['Date'].max().reset_index()
+            monthly_acc = pd.merge(
+                filtered_df[['Date', 'Month', 'Plant', 'Accumulative Production']],
+                monthly_max_dates,
+                on=['Month', 'Plant', 'Date'],
+                how='inner'
+            )[['Month', 'Plant', 'Accumulative Production']]
 
-        # Daily totals
-        monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-        weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
+            # Weekly: Max date in week per plant
+            weekly_max_dates = filtered_df.groupby(['Custom_Week', 'Plant'])['Date'].max().reset_index()
+            weekly_acc = pd.merge(
+                filtered_df[['Date', 'Custom_Week', 'Plant', 'Accumulative Production']],
+                weekly_max_dates,
+                on=['Custom_Week', 'Plant', 'Date'],
+                how='inner'
+            )[['Custom_Week', 'Plant', 'Accumulative Production']]
 
-        # === ACCUMULATIVE = FINAL DAY IN PERIOD ===
-        monthly_max_dates = filtered_df.groupby(['Month', 'Plant'])['Date'].max().reset_index()
-        weekly_max_dates = filtered_df.groupby(['Custom_Week', 'Plant'])['Date'].max().reset_index()
+            # === SUMMARY TABLE ===
+            all_plants = filtered_df['Plant'].unique()
+            summary = pd.DataFrame({"Plant": all_plants})
+            w_daily = weekly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
+            w_acc = weekly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
+            summary = summary.merge(w_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(w_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Weekly Daily Total', 'Accumulative Production': 'Weekly Accumulative'}, inplace=True)
+            m_daily = monthly_daily.groupby('Plant', as_index=False)['Production for the Day'].sum()
+            m_acc = monthly_acc.groupby('Plant', as_index=False)['Accumulative Production'].last()
+            summary = summary.merge(m_daily, on='Plant', how='left').fillna(0)
+            summary = summary.merge(m_acc, on='Plant', how='left').fillna(0)
+            summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
+            summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
-        monthly_acc = pd.merge(
-            filtered_df[['Date', 'Month', 'Plant', 'Accumulative Production']],
-            monthly_max_dates,
-            on=['Month', 'Plant', 'Date'], how='inner'
-        )[['Month', 'Plant', 'Accumulative Production']]
+            # === CHARTS ===
+            st.subheader(f"Weekly Production — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
-        weekly_acc = pd.merge(
-            filtered_df[['Date', 'Custom_Week', 'Plant', 'Accumulative Production']],
-            weekly_max_dates,
-            on=['Custom_Week', 'Plant', 'Date'], how='inner'
-        )[['Custom_Week', 'Plant', 'Accumulative Production']]
+            st.subheader(f"Monthly Production — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Daily"), use_container_width=True)
 
-        # Filter out underperformers
-        total_by_plant = monthly_daily.groupby('Plant')['Production for the Day'].sum().reset_index()
-        active_plants = total_by_plant[total_by_plant['Production for the Day'] > 10]['Plant'].tolist()
+            st.subheader(f"Weekly Accumulative (Final Day) — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
 
-        # Main summary box
-        total_monthly = monthly_daily['Production for the Day'].sum()
-        top_row = monthly_daily.loc[monthly_daily['Production for the Day'].idxmax()]
-        top_plant = top_row['Plant']
-        top_value = top_row['Production for the Day']
-        kabd_value = monthly_daily[monthly_daily['Plant'].str.contains('KABD', case=False, na=False)]['Production for the Day'].sum()
+            st.subheader(f"Monthly Accumulative (Final Day) — {start_date} to {end_date}")
+            st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
-        st.markdown(f"""
-        <div style='text-align: center; padding: 30px; background: linear-gradient(45deg, #1a1a1a, #333); 
-                    border-radius: 20px; margin: 30px 0; box-shadow: 0 0 20px rgba(255,69,0,0.5);'>
-            <h1 style='color: #FFD700; font-size: 52px; margin: 0; text-shadow: 0 0 10px #FFD700;'>TOTAL MONTHLY PRODUCTION</h1>
-            <h1 style='color: #00FF00; font-size: 72px; margin: 15px 0; text-shadow: 0 0 15px #00FF00;'>{total_monthly:,.1f} m³</h1>
-            <h2 style='color: #FF4500; font-size: 40px; margin: 20px 0;'>
-                TOP: <span style='color: #FFD700;'>{top_plant}</span> — {top_value:,.1f} m³
-            </h2>
-            {f'<h2 style="color: {"#00FF00" if kabd_value > 400 else "#FF4500"}; font-size: 36px;">KABD: {kabd_value:,.1f} m³ {"ON FIRE" if kabd_value > 400 else "NEEDS BOOST"}</h2>' if kabd_value > 0 else ''}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Charts
-        st.markdown("### Monthly Production (Daily)")
-        st.plotly_chart(clean_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
-
-        st.markdown("### Weekly Production (Daily)")
-        st.plotly_chart(clean_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production"), use_container_width=True)
-
-        st.markdown("### Monthly Accumulative (Final Day)")
-        st.plotly_chart(clean_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
-
-        st.markdown("### Weekly Accumulative (Final Day)")
-        st.plotly_chart(clean_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
-
-        # Export
-        summary = monthly_daily.merge(monthly_acc, on=['Month', 'Plant'], how='left')
-        excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
-        st.download_button("DOWNLOAD FULL REPORT", excel, f"analytics_{start_date}_to_{end_date}.xlsx",
-                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            # === DOWNLOAD ===
+            st.markdown("### DOWNLOAD REPORT AS EXCEL")
+            excel = generate_excel_report(summary, f"{start_date}_to_{end_date}")
+            st.download_button(
+                "DOWNLOAD REPORT AS EXCEL",
+                excel,
+                file_name=f"report_{start_date}_to_{end_date}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
-st.sidebar.write("GitHub auto-sync enabled")
+st.sidebar.write("Set GITHUB_TOKEN & GITHUB_REPO in secrets for auto-push.")
 st.sidebar.caption(f"Kuwait Time: {datetime.now().strftime('%I:%M %p')} | Dashboard LIVE")
