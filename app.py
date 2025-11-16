@@ -133,11 +133,7 @@ def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
     if not p.exists():
         raise FileNotFoundError(f"File not found: {date_str}")
-    df = pd.read_csv(p)
-    # CRITICAL: Remove 'Date' column to prevent duplication on rerun/theme change
-    if 'Date' in df.columns:
-        df = df.drop(columns=['Date'])
-    return df
+    return pd.read_csv(p)
 
 def delete_saved(date_str: str) -> bool:
     p = DATA_DIR / f"{date_str}.csv"
@@ -259,33 +255,28 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         color=group_col,
         color_discrete_map=color_discrete_map,
         title=title,
-        text=agg_df[value_col].round(1).apply(lambda x: f"{x:,.0f}")
+        text=agg_df[value_col].round(1)
     )
 
-    # BIG, BOLD, WHITE TEXT INSIDE BARS
     fig.update_traces(
-        texttemplate="%{text}",
-        textposition="inside",
-        textfont=dict(size=18, color="white", family="Arial Black"),
-        insidetextanchor="middle",
+        texttemplate="%{text:,.1f}",
+        textposition="outside",
+        textfont=dict(size=13, color="black"),
         cliponaxis=False
     )
 
     fig.update_layout(
-        title_font=dict(size=18, family="Arial", color="#1a1a1a"),
+        title_font=dict(size=18),
         legend_font=dict(size=14),
-        margin=dict(t=70, b=100, l=60, r=40),
+        margin=dict(t=70, b=280, l=60, r=40),
         xaxis_tickangle=0,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
         xaxis_tickfont=dict(size=13),
         yaxis_tickfont=dict(size=12),
-        bargap=0.15,
-        uniformtext=dict(mode='hide'),
-        showlegend=True
+        bargap=0.2
     )
 
-    # KABD = BOLD RED & BIGGER TEXT
     current_idx = 0
     for trace in fig.data:
         group_key = str(trace.name)
@@ -294,6 +285,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         palette = palette_map[group_key]
         trace_len = len(trace.x)
         colors = []
+        text_colors = []
         text_sizes = []
         text_families = []
 
@@ -301,16 +293,19 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
             plant = trace.x[j]
             idx = current_idx + j
             if agg_df.iloc[idx]['Plant'] == 'KABD':
-                colors.append("#FF4500")  # Bright red
-                text_sizes.append(22)
+                colors.append("#FF4500")
+                text_colors.append("#FF4500")
+                text_sizes.append(16)
                 text_families.append("Arial Black")
             else:
                 grad_idx = j % len(palette)
                 colors.append(palette[grad_idx])
-                text_sizes.append(18)
+                text_colors.append("black")
+                text_sizes.append(13)
                 text_families.append("Arial")
 
         trace.marker.color = colors
+        trace.textfont.color = text_colors
         trace.textfont.size = text_sizes
         trace.textfont.family = text_families
         current_idx += trace_len
@@ -448,7 +443,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL — THEME-PROOF
+# VIEW HISTORICAL
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -458,27 +453,16 @@ elif mode == "View Historical Data":
     else:
         default_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
         selected_date = st.date_input("Select date", value=default_date)
-        selected_str = selected_date.strftime("%Y-%m-%d")
-
-        if selected_str not in saved_list:
-            st.error(f"No data found for **{selected_str}**. Available: {', '.join(saved_list[:5])}...")
+        selected = selected_date.strftime("%Y-%m-%d")
+        if selected not in saved_list:
+            st.warning("No data for this date.")
             st.stop()
 
-        try:
-            df_hist = load_saved(selected_str)
-        except Exception as e:
-            st.error(f"Failed to load {selected_str}: {e}")
-            st.stop()
-
-        # Final safety: no 'Date' column
-        df_hist_disp = df_hist.copy()
-        if 'Date' in df_hist_disp.columns:
-            df_hist_disp = df_hist_disp.drop(columns=['Date'])
-
-        df_hist_disp = df_hist_disp[~df_hist_disp["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        df_hist = load_saved(selected)
+        df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
         df_hist_disp = safe_numeric(df_hist_disp)
 
-        st.subheader(f"Data for **{selected_str}**")
+        st.subheader(f"Data for {selected}")
         st.dataframe(df_hist_disp, use_container_width=True)
 
         total_daily = df_hist_disp["Production for the Day"].sum()
@@ -488,24 +472,24 @@ elif mode == "View Historical Data":
         st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
 
         st.markdown("### 7 Charts — Daily & Accumulative")
-        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected_str}"), use_container_width=True)
-        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected_str}"), use_container_width=True)
-        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected_str}"), use_container_width=True)
-        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected_str}"), use_container_width=True)
+        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
+        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
+        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
+        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
 
         st.markdown("#### Accumulative Production — From Saved File")
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
         acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
-        st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected_str}"), use_container_width=True)
+        st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
 
-        st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected_str}"), use_container_width=True)
-        st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected_str}"), use_container_width=True)
+        st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
+        st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
 
-        excel_file = generate_excel_report(df_hist_disp, selected_str)
+        excel_file = generate_excel_report(df_hist_disp, selected)
         st.download_button(
             "Download Excel",
             excel_file,
-            f"report_{selected_str}.xlsx",
+            f"report_{selected}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
@@ -546,7 +530,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — OVERALL + PODIUM TOP 3
+# ANALYTICS — STATIC PODIUM (NO ANIMATION)
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -599,24 +583,11 @@ elif mode == "Analytics":
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
-            # OVERALL TOTALS
-            overall_daily = summary['Monthly Daily Total'].sum()
-            overall_acc = summary['Monthly Accumulative'].sum()
-
             st.markdown("## TOP 3 PRODUCTION SITES")
 
-            # CSS STYLE
+            # === STATIC CARD STYLE ===
             st.markdown("""
             <style>
-            .overall-card {
-                padding: 22px;
-                border-radius: 16px;
-                margin: 12px 6px;
-                text-align: center;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.12);
-                background: white;
-                border: 3px solid #28a745;
-            }
             .podium-card {
                 padding: 20px;
                 border-radius: 16px;
@@ -632,44 +603,10 @@ elif mode == "Analytics":
                 margin-bottom: 10px;
                 font-weight: 900;
             }
-            .title-line {
-                border-bottom: 3px solid #28a745;
-                padding-bottom: 8px;
-                margin-bottom: 10px;
-                font-weight: 900;
-                color: #28a745;
-                font-size: 24px;
-            }
             </style>
             """, unsafe_allow_html=True)
 
-            # OVERALL ROW
-            st.markdown("### Overall Performance")
-            overall_cols = st.columns(2)
-            with overall_cols[0]:
-                st.markdown(
-                    f"<div class='overall-card'>"
-                    f"<div class='title-line'>OVERALL PRODUCTION</div>"
-                    f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:8px 0;'>"
-                    f"{overall_daily:,.1f} m³"
-                    f"</div>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-            with overall_cols[1]:
-                st.markdown(
-                    f"<div class='overall-card'>"
-                    f"<div class='title-line'>OVERALL ACCUMULATIVE</div>"
-                    f"<div style='font-size:28px; font-weight:bold; color:#1a1a1a; margin:8px 0;'>"
-                    f"{overall_acc:,.1f} m³"
-                    f"</div>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # DAILY PODIUM
+            # === DAILY PODIUM ===
             st.markdown("### Daily Production")
             podium_cols = st.columns(3)
             colors_daily = ["#FFD700", "#C0C0C0", "#CD7F32"]
@@ -695,7 +632,7 @@ elif mode == "Analytics":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # ACCUMULATIVE PODIUM
+            # === ACCUMULATIVE PODIUM ===
             st.markdown("### Accumulative Production")
             podium_cols_acc = st.columns(3)
             colors_acc = ["#1E90FF", "#4682B4", "#5F9EA0"]
@@ -722,7 +659,7 @@ elif mode == "Analytics":
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.markdown("---")
 
-            # CHARTS BELOW
+            # === CHARTS BELOW ===
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
 
@@ -749,3 +686,4 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
