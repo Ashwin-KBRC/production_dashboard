@@ -16,7 +16,7 @@ import xlsxwriter
 # ========================================
 # PAGE CONFIG & SETUP
 # ========================================
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Fire")
+st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
@@ -166,33 +166,34 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     return output
 
 # ========================================
-# ANIMATED AGGREGATED BAR — FINAL VERSION
+# CLEAN STATIC BAR CHART — BOLD & PROFESSIONAL
 # ========================================
-def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
-    df = df[df[value_col] > 0].copy()
-    if df.empty:
+def clean_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, colors: list, title: str):
+    if df.empty or value_col not in df.columns:
         fig = go.Figure()
         fig.add_annotation(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=20, color="white"))
         fig.update_layout(title=title, title_font=dict(size=22, family="Arial Black", color="#FFD700"), plot_bgcolor="#1a1a1a", paper_bgcolor="#111")
         return fig
 
+    df = df.copy()
     df[value_col] = df[value_col].astype('float64')
-    groups = sorted(df[group_col].unique())
+    df = df.sort_values(value_col, ascending=False)
+
     fig = go.Figure()
+    for i, plant in enumerate(df["Plant"]):
+        val = df[df["Plant"] == plant][value_col].sum()
+        group = df[df["Plant"] == plant][group_col].iloc[0] if group_col in df.columns else ""
+        fig.add_trace(go.Bar(
+            x=[plant],
+            y=[val],
+            name=f"{group} - {plant}",
+            marker_color=colors[i % len(colors)],
+            text=f"{val:,.1f}",
+            textposition="outside",
+            textfont=dict(size=16, family="Arial Black", color="white"),
+            marker=dict(line=dict(width=3, color="white"))
+        ))
 
-    # Initial empty bars
-    for i, group in enumerate(groups):
-        sub = df[df[group_col] == group]
-        for j, plant in enumerate(sub["Plant"]):
-            fig.add_trace(go.Bar(
-                x=[plant], y=[0], name=f"{group}<br>{plant}",
-                marker_color=colors[i % len(colors)],
-                text="", textposition="outside",
-                textfont=dict(size=16, family="Arial Black", color="white"),
-                marker=dict(line=dict(width=3, color="white"))
-            ))
-
-    # Layout — BOLD & CLEAN
     fig.update_layout(
         title=title,
         title_font=dict(size=22, family="Arial Black", color="#FFD700"),
@@ -211,42 +212,8 @@ def animated_aggregated_bar(df: pd.DataFrame, value_col: str, group_col: str, co
             title="m³", title_font=dict(size=18, family="Arial Black"),
             tickfont=dict(size=14, family="Arial"),
             gridcolor="#444"
-        ),
-        # PLAY BUTTON OUTSIDE TOP-LEFT
-        updatemenus=[dict(
-            type="buttons",
-            direction="left",
-            buttons=[dict(
-                label="Play",
-                method="animate",
-                args=[None, {"frame": {"duration": 600, "redraw": True}, "fromcurrent": True, "transition": {"duration": 300}}]
-            )],
-            pad={"r": 10, "t": 10},
-            showactive=True,
-            x=0.01, y=1.18,
-            xanchor="left", yanchor="top",
-            font=dict(size=16, family="Arial Black", color="#FFD700"),
-            bgcolor="#333", bordercolor="#FFD700", borderwidth=2
-        )]
+        )
     )
-
-    # Animation frames
-    frames = []
-    for step in range(11):
-        frame_data = []
-        for trace in fig.data:
-            group = trace.name.split("<br>")[0]
-            plant = trace.name.split("<br>")[1]
-            full_val = df[(df[group_col] == group) & (df["Plant"] == plant)][value_col].sum()
-            val = full_val * (step / 10)
-            text_val = f"{val:,.1f}" if val > 0 else ""
-            frame_data.append(go.Bar(
-                x=[plant], y=[val], text=[text_val], textposition="outside",
-                textfont=dict(size=16, family="Arial Black", color="white"),
-                marker=dict(line=dict(width=3, color="white"))
-            ))
-        frames.append(go.Frame(data=frame_data, name=str(step)))
-    fig.frames = frames
 
     # Highlight KABD
     for trace in fig.data:
@@ -407,7 +374,7 @@ elif mode == "Manage Data":
                     st.download_button("Download", excel, f"{date_str}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_btn_{date_str}")
 
 # ========================================
-# ANALYTICS — FINAL & CORRECT
+# ANALYTICS — FINAL, CLEAN, CORRECT
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -460,18 +427,18 @@ elif mode == "Analytics":
             </div>
             """, unsafe_allow_html=True)
 
-            # CHARTS
+            # CLEAN STATIC CHARTS
             st.markdown("### Monthly Production (Daily)")
-            st.plotly_chart(animated_aggregated_bar(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly"), use_container_width=True)
+            st.plotly_chart(clean_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
 
             st.markdown("### Weekly Production (Daily)")
-            st.plotly_chart(animated_aggregated_bar(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly"), use_container_width=True)
+            st.plotly_chart(clean_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production"), use_container_width=True)
 
             st.markdown("### Monthly Accumulative (Final Day)")
-            st.plotly_chart(animated_aggregated_bar(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
+            st.plotly_chart(clean_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
             st.markdown("### Weekly Accumulative (Final Day)")
-            st.plotly_chart(animated_aggregated_bar(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+            st.plotly_chart(clean_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
 
             st.markdown("### Download Full Report")
             summary_df = monthly_daily.copy()
@@ -484,4 +451,4 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set GITHUB_TOKEN & GITHUB_REPO in secrets for auto-push.")
-st.sidebar.caption("Kuwait Time: 09:30 AM | Dashboard LIVE")
+st.sidebar.caption("Kuwait Time: 09:33 AM | Dashboard LIVE")
