@@ -133,7 +133,11 @@ def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
     if not p.exists():
         raise FileNotFoundError(f"File not found: {date_str}")
-    return pd.read_csv(p)
+    df = pd.read_csv(p)
+    # Ensure 'Date' column exists and is consistent
+    if 'Date' not in df.columns:
+        df['Date'] = date_str
+    return df
 
 def delete_saved(date_str: str) -> bool:
     p = DATA_DIR / f"{date_str}.csv"
@@ -255,28 +259,33 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         color=group_col,
         color_discrete_map=color_discrete_map,
         title=title,
-        text=agg_df[value_col].round(1)
+        text=agg_df[value_col].round(1).apply(lambda x: f"{x:,.0f}")
     )
 
+    # === BIG, BOLD, WHITE TEXT INSIDE BARS ===
     fig.update_traces(
-        texttemplate="%{text:,.1f}",
-        textposition="outside",
-        textfont=dict(size=13, color="black"),
+        texttemplate="%{text}",
+        textposition="inside",
+        textfont=dict(size=18, color="white", family="Arial Black"),
+        insidetextanchor="middle",
         cliponaxis=False
     )
 
     fig.update_layout(
-        title_font=dict(size=18),
+        title_font=dict(size=18, family="Arial", color="#1a1a1a"),
         legend_font=dict(size=14),
-        margin=dict(t=70, b=280, l=60, r=40),
+        margin=dict(t=70, b=100, l=60, r=40),
         xaxis_tickangle=0,
         xaxis_gridcolor="#E0E0E0",
         yaxis_gridcolor="#E0E0E0",
         xaxis_tickfont=dict(size=13),
         yaxis_tickfont=dict(size=12),
-        bargap=0.2
+        bargap=0.15,
+        uniformtext=dict(mode='hide'),
+        showlegend=True
     )
 
+    # === KABD = BOLD RED & BIGGER TEXT ===
     current_idx = 0
     for trace in fig.data:
         group_key = str(trace.name)
@@ -285,7 +294,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         palette = palette_map[group_key]
         trace_len = len(trace.x)
         colors = []
-        text_colors = []
         text_sizes = []
         text_families = []
 
@@ -293,19 +301,16 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
             plant = trace.x[j]
             idx = current_idx + j
             if agg_df.iloc[idx]['Plant'] == 'KABD':
-                colors.append("#FF4500")
-                text_colors.append("#FF4500")
-                text_sizes.append(16)
+                colors.append("#FF4500")  # Bright red
+                text_sizes.append(22)
                 text_families.append("Arial Black")
             else:
                 grad_idx = j % len(palette)
                 colors.append(palette[grad_idx])
-                text_colors.append("black")
-                text_sizes.append(13)
+                text_sizes.append(18)
                 text_families.append("Arial")
 
         trace.marker.color = colors
-        trace.textfont.color = text_colors
         trace.textfont.size = text_sizes
         trace.textfont.family = text_families
         current_idx += trace_len
@@ -443,7 +448,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL
+# VIEW HISTORICAL — FIXED
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -451,18 +456,30 @@ elif mode == "View Historical Data":
     if not saved_list:
         st.info("No data.")
     else:
+        # Default to latest date
         default_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
         selected_date = st.date_input("Select date", value=default_date)
-        selected = selected_date.strftime("%Y-%m-%d")
-        if selected not in saved_list:
-            st.warning("No data for this date.")
+        selected_str = selected_date.strftime("%Y-%m-%d")
+
+        if selected_str not in saved_list:
+            st.error(f"No data found for **{selected_str}**. Available: {', '.join(saved_list[:5])}...")
             st.stop()
 
-        df_hist = load_saved(selected)
+        try:
+            df_hist = load_saved(selected_str)
+        except Exception as e:
+            st.error(f"Failed to load {selected_str}: {e}")
+            st.stop()
+
+        # Filter out TOTAL rows and ensure correct data
         df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
         df_hist_disp = safe_numeric(df_hist_disp)
 
-        st.subheader(f"Data for {selected}")
+        # Remove 'Date' column from display if it exists
+        if 'Date' in df_hist_disp.columns:
+            df_hist_disp = df_hist_disp.drop(columns=['Date'])
+
+        st.subheader(f"Data for **{selected_str}**")
         st.dataframe(df_hist_disp, use_container_width=True)
 
         total_daily = df_hist_disp["Production for the Day"].sum()
@@ -472,24 +489,24 @@ elif mode == "View Historical Data":
         st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
 
         st.markdown("### 7 Charts — Daily & Accumulative")
-        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
-        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
-        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
+        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected_str}"), use_container_width=True)
+        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected_str}"), use_container_width=True)
+        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected_str}"), use_container_width=True)
+        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected_str}"), use_container_width=True)
 
         st.markdown("#### Accumulative Production — From Saved File")
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
         acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
-        st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
+        st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected_str}"), use_container_width=True)
 
-        st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
+        st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected_str}"), use_container_width=True)
+        st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected_str}"), use_container_width=True)
 
-        excel_file = generate_excel_report(df_hist_disp, selected)
+        excel_file = generate_excel_report(df_hist_disp, selected_str)
         st.download_button(
             "Download Excel",
             excel_file,
-            f"report_{selected}.xlsx",
+            f"report_{selected_str}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
@@ -518,7 +535,7 @@ elif mode == "Manage Data":
                 if st.button("Download", key=f"dl_{date_str}"):
                     try:
                         df = load_saved(date_str)
-                        excel = generate_excel_report(df, date_str)
+                        excel = generate_excel_report(df.drop(columns=['Date'], errors='ignore'), date_str)
                         st.download_button(
                             label="Download",
                             data=excel,
