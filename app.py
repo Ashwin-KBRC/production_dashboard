@@ -15,7 +15,7 @@ import xlsxwriter
 # ========================================
 # PAGE CONFIG & SETUP
 # ========================================
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Chart")
+st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Trophy")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
@@ -73,9 +73,9 @@ WEEKLY_PALETTES = [
 ]
 
 if "theme" not in st.session_state:
-    st.session_state["theme"] = "Modern Slate"
+    st.session_state["theme"] = "Lava Flow"
 elif st.session_state["theme"] not in COLOR_THEMES:
-    st.session_state["theme"] = "Modern Slate"
+    st.session_state["theme"] = "Lava Flow"
 
 # ========================================
 # AUTH FUNCTIONS
@@ -530,7 +530,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — PODIUM TOP 3 + ACCUMULATIVE
+# ANALYTICS — ANIMATED PODIUM TOP 3 + ACCUMULATIVE
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -580,49 +580,87 @@ elif mode == "Analytics":
             summary.rename(columns={'Production for the Day': 'Monthly Daily Total', 'Accumulative Production': 'Monthly Accumulative'}, inplace=True)
             summary = summary.sort_values("Monthly Daily Total", ascending=False)
 
-            # === PODIUM TOP 3: DAILY ===
             top_daily = summary.nlargest(3, 'Monthly Daily Total')[['Plant', 'Monthly Daily Total']].reset_index(drop=True)
             top_acc = summary.nlargest(3, 'Monthly Accumulative')[['Plant', 'Monthly Accumulative']].reset_index(drop=True)
 
             st.markdown("## TOP 3 PRODUCTION SITES")
 
+            # === CSS ANIMATIONS ===
+            st.markdown("""
+            <style>
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.08); }
+                100% { transform: scale(1); }
+            }
+            @keyframes bounce {
+                0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+                40% { transform: translateY(-15px); }
+                60% { transform: translateY(-7px); }
+            }
+            @keyframes swing {
+                0% { transform: rotate(0deg); }
+                50% { transform: rotate(5deg); }
+                100% { transform: rotate(0deg); }
+            }
+            .podium-1st { animation: pulse 2s infinite; }
+            .podium-2nd { animation: bounce 1.6s infinite; }
+            .podium-3rd { animation: swing 2s infinite; }
+            .podium-card {
+                padding: 16px;
+                border-radius: 16px;
+                margin: 10px;
+                text-align: center;
+                box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+                transition: all 0.3s ease;
+            }
+            .podium-card:hover { transform: translateY(-5px); box-shadow: 0 12px 20px rgba(0,0,0,0.2); }
+            </style>
+            """, unsafe_allow_html=True)
+
             # === DAILY PODIUM ===
             st.markdown("### Daily Production")
+            podium_cols = st.columns(3)
             for idx in range(min(3, len(top_daily))):
                 row = top_daily.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
-                size = [36, 28, 22][idx]  # Font size
-                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]  # Gold, Silver, Bronze
-                align = "center" if idx == 0 else "left" if idx == 1 else "right"
-                st.markdown(
-                    f"<div style='text-align:{align};'>"
-                    f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:5px 0;'>"
-                    f"**{rank}** → **{row['Plant']}**<br>"
-                    f"<span style='font-size:{size-6}px;'>{row['Monthly Daily Total']:,.1f} m³</span>"
-                    f"</h{6-idx}>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
+                size = [36, 28, 22][idx]
+                color = ["#FFD700", "#C0C0C0", "#CD7F32"][idx]
+                anim_class = ["podium-1st", "podium-2nd", "podium-3rd"][idx]
+                with podium_cols[idx]:
+                    st.markdown(
+                        f"<div class='podium-card {anim_class}' style='background:linear-gradient(135deg, {color}20, #ffffff); border: 2px solid {color};'>"
+                        f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:8px 0;'>"
+                        f"**{rank}**<br>"
+                        f"<strong style='font-size:20px;'>{row['Plant']}</strong><br>"
+                        f"<span style='font-size:{size-6}px; color:#1a1a1a;'>{row['Monthly Daily Total']:,.1f} m³</span>"
+                        f"</h{6-idx}>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
             st.markdown("<br>", unsafe_allow_html=True)
 
             # === ACCUMULATIVE PODIUM ===
             st.markdown("### Accumulative Production")
+            podium_cols_acc = st.columns(3)
             for idx in range(min(3, len(top_acc))):
                 row = top_acc.iloc[idx]
                 rank = ["1st", "2nd", "3rd"][idx]
                 size = [36, 28, 22][idx]
-                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]  # Deep Blue gradient
-                align = "center" if idx == 0 else "left" if idx == 1 else "right"
-                st.markdown(
-                    f"<div style='text-align:{align};'>"
-                    f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:5px 0;'>"
-                    f"**{rank}** → **{row['Plant']}**<br>"
-                    f"<span style='font-size:{size-6}px;'>{row['Monthly Accumulative']:,.1f} m³</span>"
-                    f"</h{6-idx}>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
+                color = ["#1E90FF", "#4682B4", "#5F9EA0"][idx]
+                anim_class = ["podium-1st", "podium-2nd", "podium-3rd"][idx]
+                with podium_cols_acc[idx]:
+                    st.markdown(
+                        f"<div class='podium-card {anim_class}' style='background:linear-gradient(135deg, {color}20, #ffffff); border: 2px solid {color};'>"
+                        f"<h{6-idx} style='color:{color}; font-size:{size}px; margin:8px 0;'>"
+                        f"**{rank}**<br>"
+                        f"<strong style='font-size:20px;'>{row['Plant']}</strong><br>"
+                        f"<span style='font-size:{size-6}px; color:#1a1a1a;'>{row['Monthly Accumulative']:,.1f} m³</span>"
+                        f"</h{6-idx}>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
             st.markdown("**Note**: Each week/month has **unique gradient colors**. KABD is **bold red**.")
             st.markdown("---")
