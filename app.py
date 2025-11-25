@@ -330,21 +330,17 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     return output
 
 
-# === FINAL 9-LINE "Install App" BUTTON (WORKS ON YOUR LIVE SITE) ===
-if st.session_state.get("logged_in", False):
+
+# Add this right after st.set_page_config(...)
+if st.session_state.get("logged_in"):
     st.markdown("""
-    <button onclick="if(window.__prompt){window.__prompt.prompt();this.style.display='none'}"
-    style="position:fixed;top:12px;right:20px;z-index:9999;background:#006400;color:white;
-    border:none;padding:12px 24px;border-radius:30px;font-weight:bold;font-size:15px;
-    cursor:pointer;box-shadow:0 4px 15px rgba(0,100,0,0.4);">
-    Install KBRC App
+    <button onclick="navigator.share?.({title:'KBRC Dashboard',url:location.href}) || 
+    alert('Press Ctrl+D (or Cmd+D on Mac) to bookmark, then drag the bookmark to your desktop')"
+    style="position:fixed;top:12px;right:15px;z-index:9999;background:#006400;color:white;
+    border:none;padding:10px 18px;border-radius:50px;font-weight:bold;font-size:14px;
+    cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    Add to Desktop
     </button>
-    <script>
-    window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        window.__prompt = e;
-    });
-    </script>
     """, unsafe_allow_html=True)
 
 # ========================================
@@ -704,6 +700,7 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
 
 
