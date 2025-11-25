@@ -329,30 +329,6 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     output.seek(0)
     return output
 
-
-
-# Add this right after st.set_page_config(...)
-col1, col2 = st.columns([1, 1])
-with col1:
-    st.empty()  # Spacer
-with col2:
-    if st.button("📱 Add to Desktop / Home Screen", help="Click for install guide"):
-        st.info("""
-        **To install as a real app:**
-        
-        **Desktop (Chrome/Edge):**
-        1. Press Ctrl+D (bookmark this page)
-        2. Right-click the bookmark → "Show in folder"
-        3. Drag the bookmark to your desktop
-        4. Double-click the shortcut → opens as an app!
-        
-        **Mobile (Android/iPhone):**
-        1. Tap the Share button (this page)
-        2. Choose "Add to Home Screen"
-        3. Tap "Add" → now it's on your home screen!
-        
-        **Why?** This makes it open fullscreen, no browser tabs — like a real app.
-        """)
 # ========================================
 # LOGIN CHECK
 # ========================================
@@ -710,9 +686,5 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
-
-
-
-
 
 
