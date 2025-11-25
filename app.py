@@ -329,6 +329,24 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     output.seek(0)
     return output
 
+
+# === FINAL 9-LINE "Install App" BUTTON (WORKS ON YOUR LIVE SITE) ===
+if st.session_state.get("logged_in", False):
+    st.markdown("""
+    <button onclick="if(window.__prompt){window.__prompt.prompt();this.style.display='none'}"
+    style="position:fixed;top:12px;right:20px;z-index:9999;background:#006400;color:white;
+    border:none;padding:12px 24px;border-radius:30px;font-weight:bold;font-size:15px;
+    cursor:pointer;box-shadow:0 4px 15px rgba(0,100,0,0.4);">
+    Install KBRC App
+    </button>
+    <script>
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        window.__prompt = e;
+    });
+    </script>
+    """, unsafe_allow_html=True)
+
 # ========================================
 # LOGIN CHECK
 # ========================================
@@ -686,5 +704,6 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
 
