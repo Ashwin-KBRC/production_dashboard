@@ -331,18 +331,19 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
 
 
 
-# Add this right after st.set_page_config(...)
+# Paste this right after st.set_page_config(...)
 if st.session_state.get("logged_in"):
     st.markdown("""
     <button onclick="navigator.share?.({title:'KBRC Dashboard',url:location.href}) || 
-    alert('Press Ctrl+D (or Cmd+D on Mac) to bookmark, then drag the bookmark to your desktop')"
-    style="position:fixed;top:12px;right:15px;z-index:9999;background:#006400;color:white;
-    border:none;padding:10px 18px;border-radius:50px;font-weight:bold;font-size:14px;
-    cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    alert('Press Ctrl+D (or Cmd+D on Mac) → then drag the bookmark to your desktop')"
+    style="position:fixed;bottom:20px;left:20px;z-index:9999;
+    background:#006400;color:white;border:none;padding:14px 20px;
+    border-radius:50px;font-weight:bold;font-size:15px;
+    cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.3);
+    font-family:Arial,sans-serif;">
     Add to Desktop
     </button>
     """, unsafe_allow_html=True)
-
 # ========================================
 # LOGIN CHECK
 # ========================================
@@ -700,6 +701,7 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
 
 
