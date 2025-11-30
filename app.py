@@ -593,7 +593,7 @@ avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(
 top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
 
     # TOP 3 LEADERS
-    st.markdown("## TOP 3 LEADERS")
+st.markdown("## TOP 3 LEADERS")
     colA, colB = st.columns(2)
 
     with colA:
@@ -646,6 +646,7 @@ top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
 
