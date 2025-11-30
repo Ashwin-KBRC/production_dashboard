@@ -518,10 +518,11 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — 100% FIXED & TESTED (Mutla finally wins)
+# ANALYTICS — FIXED INDENTATION
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
+
     saved = list_saved_dates()
     if len(saved) < 2:
         st.info("Need at least 2 days of data.")
@@ -548,6 +549,7 @@ elif mode == "Analytics":
         st.stop()
 
     all_df = pd.concat(frames, ignore_index=True)
+
     filtered_df = all_df[
         (all_df['Date'] >= pd.to_datetime(start_date)) &
         (all_df['Date'] <= pd.to_datetime(end_date))
@@ -557,9 +559,9 @@ elif mode == "Analytics":
         st.warning("No data in selected range.")
         st.stop()
 
-    # CRITICAL FIXES
+    # Clean & sort
     filtered_df = safe_numeric(filtered_df)
-    filtered_df = filtered_df.sort_values(['Plant', 'Date']).reset_index(drop=True)  # ← This is the key
+    filtered_df = filtered_df.sort_values(['Plant', 'Date']).reset_index(drop=True)
 
     total_daily_all = filtered_df["Production for the Day"].sum()
 
@@ -576,76 +578,97 @@ elif mode == "Analytics":
     </div>
     """, unsafe_allow_html=True)
 
-    # CORRECT LATEST ACCUMULATIVE — NOW 100% ACCURATE
-   # FINAL FIX — TOP 3 NOW = EXACTLY THE SAME AS MONTHLY ACCUMULATIVE CHART
-# ULTIMATE FIX — FORCE TOP 3 TO MATCH CHART VALUES 100%
-# This takes the EXACT same value that appears in the "Monthly Accumulative" chart
-monthly_acc_for_top3 = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
-latest_month = monthly_acc_for_top3['Month'].max()  # latest month in the range
-latest_cumulative = monthly_acc_for_top3[
-    monthly_acc_for_top3['Month'] == latest_month
-][['Plant', 'Accumulative Production']].copy()
-
-latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
-
-    # Average daily
-avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
-top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
-
-    # TOP 3 LEADERS
-st.markdown("## TOP 3 LEADERS")
-colA, colB = st.columns(2)
-
-with colA:
-     st.markdown("### Average Daily Production")
-    for i, row in top_avg.iterrows():
-        rank = ["1st", "2nd", "3rd"][i]
-        color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
-        st.markdown(f"""
-        <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
-                    border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
-             <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-            <h2 style="margin:15px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
-         </div>
-         """, unsafe_allow_html=True)
-
-with colB:
-    st.markdown("### Latest Accumulative Production")
-    for i, row in latest_cumulative.head(3).iterrows():
-        rank = ["1st", "2nd", "3rd"][i]
-        color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
-        st.markdown(f"""
-        <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
-                     border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
-            <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-             <h2 style="margin:15px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
-        </div>
-         """, unsafe_allow_html=True)
-
-    # Charts (unchanged — already correct)
-    filtered_df['Custom_Week'] = ((filtered_df['Date'] - filtered_df['Date'].min()).dt.days // 7) + 1
+    # ============================
+    # FIXED TOP 3 ACCUMULATIVE
+    # ============================
     filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+
+    monthly_acc_for_top3 = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+
+    latest_month = monthly_acc_for_top3['Month'].max()
+
+    latest_cumulative = monthly_acc_for_top3[
+        monthly_acc_for_top3['Month'] == latest_month
+    ][['Plant', 'Accumulative Production']].copy()
+
+    latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
+
+    # ============================
+    # AVERAGE DAILY TOP 3
+    # ============================
+    avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
+    top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
+
+    # ============================
+    # TOP 3 LEADERS DISPLAY
+    # ============================
+    st.markdown("## TOP 3 LEADERS")
+    colA, colB = st.columns(2)
+
+    with colA:
+        st.markdown("### Average Daily Production")
+
+        for i, row in top_avg.iterrows():
+            rank = ["1st", "2nd", "3rd"][i]
+            color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
+
+            st.markdown(f"""
+            <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
+                        border-left:15px solid {color};
+                        box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
+                <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
+                <h2 style="margin:15px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with colB:
+        st.markdown("### Latest Accumulative Production")
+
+        for i, row in latest_cumulative.head(3).iterrows():
+            rank = ["1st", "2nd", "3rd"][i]
+            color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
+
+            st.markdown(f"""
+            <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
+                        border-left:15px solid {color};
+                        box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
+                <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
+                <h2 style="margin:15px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ============================
+    # WEEKLY + MONTHLY CHARTS
+    # ============================
+
+    filtered_df['Custom_Week'] = ((filtered_df['Date'] - filtered_df['Date'].min()).dt.days // 7) + 1
 
     weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
     monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
+
     weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
     monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
 
     st.markdown("---")
     st.subheader("Weekly Production")
     st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production"), use_container_width=True)
+
     st.subheader("Monthly Production")
     st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
+
     st.subheader("Weekly Accumulative (Latest per Week)")
     st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+
     st.subheader("Monthly Accumulative (Latest per Month)")
     st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
+
 
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
 
