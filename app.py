@@ -245,6 +245,9 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
+# ========================================
+# FIXED aggregated_bar_chart — REPLACE THIS ENTIRE FUNCTION
+# ========================================
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -287,7 +290,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         group_key = str(trace.name)
         if group_key not in palette_map:
             continue
-        palette = palette_map[group.get(group_key, WEEKLY_PALETTES[0])
+        palette = palette_map[group_key]  # ← FIXED LINE
         trace_len = len(trace.x)
         colors = []
         text_colors = []
@@ -660,3 +663,4 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
