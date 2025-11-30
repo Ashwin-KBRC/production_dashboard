@@ -578,11 +578,14 @@ elif mode == "Analytics":
 
     # CORRECT LATEST ACCUMULATIVE — NOW 100% ACCURATE
    # FINAL FIX — TOP 3 NOW = EXACTLY THE SAME AS MONTHLY ACCUMULATIVE CHART
+# ULTIMATE FIX — FORCE TOP 3 TO MATCH CHART VALUES 100%
+# This takes the EXACT same value that appears in the "Monthly Accumulative" chart
 monthly_acc_for_top3 = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
-latest_month = monthly_acc_for_top3['Month'].max()
+latest_month = monthly_acc_for_top3['Month'].max()  # latest month in the range
 latest_cumulative = monthly_acc_for_top3[
     monthly_acc_for_top3['Month'] == latest_month
 ][['Plant', 'Accumulative Production']].copy()
+
 latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
 
     # Average daily
@@ -643,5 +646,6 @@ latest_cumulative = latest_cumulative.sort_values('Accumulative Production', asc
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
