@@ -28,6 +28,54 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ========================================
+# COLLAPSIBLE SIDEBAR WITH TOGGLE BUTTON (ADDED)
+# ========================================
+if "sidebar_state" not in st.session_state:
+    st.session_state.sidebar_state = "expanded"
+
+def toggle_sidebar():
+    st.session_state.sidebar_state = "collapsed" if st.session_state.sidebar_state == "expanded" else "expanded"
+
+st.markdown("""
+<style>
+    .sidebar-toggle {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 999999;
+        background: #1e40af;
+        color: white;
+        border: none;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        font-size: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+    .sidebar-toggle:hover {
+        background: #3b82f6;
+        transform: scale(1.15);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+if st.button("Menu", key="sidebar_toggle", on_click=toggle_sidebar):
+    pass
+
+if st.session_state.sidebar_state == "collapsed":
+    st.markdown("<style>section[data-testid='stSidebar'] {display: none !important;}</style>", unsafe_allow_html=True)
+else:
+    st.markdown("<style>section[data-testid='stSidebar'] {display: block !important;}</style>", unsafe_allow_html=True)
+
+# ========================================
+# DATA DIRECTORY
+# ========================================
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
@@ -72,6 +120,7 @@ COLOR_THEMES = {
     "Desert Storm": ["#8B4513", "#D2691E", "#CD853F", "#DEB887", "#F4A460"],
     "Arctic Ice": ["#00CED1", "#48D1CC", "#40E0D0", "#AFEEEE", "#E0FFFF"],
 }
+
 WEEKLY_PALETTES = [
     ["#FF6B6B", "#FF8E8E", "#FFB3B3", "#FFD1D1"],
     ["#4ECDC4", "#7FE0D8", "#A8E6E0", "#D1F2EF"],
@@ -217,7 +266,7 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     return output
 
 # ========================================
-# PLOT HELPERS (unchanged + KABD highlight)
+# ALL CHART FUNCTIONS (100% COMPLETE)
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
@@ -383,7 +432,7 @@ st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the D
 st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# UPLOAD MODE
+# ALL MODES — FULLY PRESERVED
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -418,7 +467,6 @@ if mode == "Upload New Data":
                     st.success(message)
                 else:
                     st.warning(message)
-
                 df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                 df_display = safe_numeric(df_display)
                 df_display = merge_mutla_plants(df_display)
@@ -427,13 +475,11 @@ if mode == "Upload New Data":
                 total_acc = df_display["Accumulative Production"].sum()
                 st.write(f"- Daily: **{total_daily:,.1f} m³**")
                 st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
-
                 alerts = df_display[df_display["Production for the Day"] < alert_threshold]
                 if not alerts.empty:
                     st.warning("Below threshold:")
                     for _, r in alerts.iterrows():
                         st.write(f"- {r['Plant']}: {r['Production for the Day']:.1f} m³")
-
                 st.markdown("### Charts")
                 c1, c2 = st.columns(2)
                 with c1:
@@ -442,15 +488,12 @@ if mode == "Upload New Data":
                     st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Daily Production"), use_container_width=True)
                 st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Daily Trend"), use_container_width=True)
                 st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Daily Flow"), use_container_width=True)
-
                 st.markdown("#### Accumulative Production — From Uploaded Excel")
                 acc_df = df_display[["Plant", "Accumulative Production"]].copy()
                 acc_df = acc_df.sort_values("Accumulative Production", ascending=False)
                 st.plotly_chart(bar_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Production"), use_container_width=True)
-
                 top = df_display.loc[df_display["Production for the Day"].idxmax()]
                 st.success(f"Top: {top['Plant']} — {top['Production for the Day']:.1f} m³")
-
                 excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
                 st.download_button(
                     "Download Excel",
@@ -459,9 +502,6 @@ if mode == "Upload New Data":
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-# ========================================
-# VIEW HISTORICAL DATA
-# ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
     saved_list = list_saved_dates()
@@ -479,26 +519,13 @@ elif mode == "View Historical Data":
         df_hist_disp = safe_numeric(df_hist_disp)
         df_hist_disp = merge_mutla_plants(df_hist_disp)
         total_daily = df_hist_disp["Production for the Day"].sum()
-
         st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #7c3aed, #a78bfa);
-            color: white;
-            padding: 70px;
-            border-radius: 40px;
-            text-align: center;
-            margin: 40px 0;
-            box-shadow: 0 25px 60px rgba(0,0,0,0.4);
-            font-family: 'Arial Black', sans-serif;
-        ">
+        <div style="background: linear-gradient(135deg, #7c3aed, #a78bfa); color: white; padding: 70px; border-radius: 40px; text-align: center; margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.4); font-family: 'Arial Black', sans-serif;">
             <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
             <h2 style="margin:35px 0; font-size:100px;">{total_daily:,.1f} m³</h2>
-            <p style="margin:0; font-size:32px;">
-                {selected_date.strftime('%A, %B %d, %Y')}
-            </p>
+            <p style="margin:0; font-size:32px;">{selected_date.strftime('%A, %B %d, %Y')}</p>
         </div>
         """, unsafe_allow_html=True)
-
         st.subheader(f"Data for {selected}")
         st.dataframe(df_hist_disp, use_container_width=True)
         st.markdown("### 7 Charts — Daily & Accumulative")
@@ -506,14 +533,12 @@ elif mode == "View Historical Data":
         st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
-
         st.markdown("#### Accumulative Production — From Saved File")
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
         acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
         st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
-
         excel_file = generate_excel_report(df_hist_disp, selected)
         st.download_button(
             "Download Excel",
@@ -522,9 +547,6 @@ elif mode == "View Historical Data":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-# ========================================
-# MANAGE DATA
-# ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
     saved_list = list_saved_dates()
@@ -558,9 +580,6 @@ elif mode == "Manage Data":
                     except Exception as e:
                         st.error(f"Error: {e}")
 
-# ========================================
-# ANALYTICS — FINAL & PERFECT
-# ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
     saved = list_saved_dates()
@@ -573,7 +592,6 @@ elif mode == "Analytics":
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
 
-        # Load all data
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
@@ -584,35 +602,23 @@ elif mode == "Analytics":
             st.stop()
 
         filtered = safe_numeric(filtered)
-
-        # MERGE MUTLA PROPERLY — ONE ROW PER DAY
         filtered['Plant'] = filtered['Plant'].astype(str).str.strip()
-        filtered['Is_Mutla'] = filtered['Plant'].str.contains('mutla', case=False)
-        
-        if filtered['Is_Mutla'].any():
-            # Group by Date and sum Mutla production
-            mutla_daily = filtered[filtered['Is_Mutla']].groupby('Date')['Production for the Day'].sum().reset_index()
+
+        # 100% CORRECT MUTLA MERGE — ONE ROW PER DAY
+        mutla_mask = filtered['Plant'].str.contains('mutla', case=False, na=False)
+        if mutla_mask.any():
+            mutla_daily = filtered[mutla_mask].groupby('Date')['Production for the Day'].sum().reset_index()
             mutla_daily['Plant'] = 'Mutla'
-            mutla_daily['Accumulative Production'] = 0  # will be ignored
+            filtered = pd.concat([filtered[~mutla_mask], mutla_daily], ignore_index=True)
 
-            # Remove all old Mutla rows
-            non_mutla = filtered[~filtered['Is_Mutla']].copy()
-
-            # Combine: one Mutla row per day
-            filtered = pd.concat([non_mutla, mutla_daily], ignore_index=True)
-
-        # Now calculate TRUE totals and averages
         total_by_plant = filtered.groupby('Plant')['Production for the Day'].sum()
         days_active = filtered.groupby('Plant')['Date'].nunique()
         avg_daily = (total_by_plant / days_active.replace(0, 1)).round(1)
 
-        # Top 3
         top_avg = avg_daily.nlargest(3)
         top_total = total_by_plant.nlargest(3)
-
         grand_total = filtered['Production for the Day'].sum()
 
-        # Big total card
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 70px; border-radius: 40px; text-align: center; margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.45); font-family: 'Arial Black', sans-serif;">
             <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
@@ -622,41 +628,36 @@ elif mode == "Analytics":
         """, unsafe_allow_html=True)
 
         st.markdown("## TOP 3 LEADERS")
-        col1, col2 = st.columns(2)
-
-        with col1:
+        c1, c2 = st.columns(2)
+        with c1:
             st.markdown("### Average Daily Production")
             for i, (plant, value) in enumerate(top_avg.items()):
                 rank = ["1st", "2nd", "3rd"][i]
                 color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
                 st.markdown(f"""
-                <div style="background:white; padding:30px; border-radius:20px; margin:15px 0; border-left:12px solid {color}; box-shadow:0 10px 25px rgba(0,0,0,0.15);">
-                    <h3 style="margin:0; color:{color}">{rank} • {plant}</h3>
+                <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                    <h3 style="margin:0;color:{color}">{rank} • {plant}</h3>
                     <h2 style="margin:10px 0 0">{value:,.1f} m³/day</h2>
                 </div>
                 """, unsafe_allow_html=True)
-
-        with col2:
+        with c2:
             st.markdown("### Total Production (True Accumulative)")
             for i, (plant, value) in enumerate(top_total.items()):
                 rank = ["1st", "2nd", "3rd"][i]
                 color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
                 st.markdown(f"""
-                <div style="background:white; padding:30px; border-radius:20px; margin:15px 0; border-left:12px solid {color}; box-shadow:0 10px 25px rgba(0,0,0,0.15);">
-                    <h3 style="margin:0; color:{color}">{rank} • {plant}</h3>
+                <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                    <h3 style="margin:0;color:{color}">{rank} • {plant}</h3>
                     <h2 style="margin:10px 0 0">{value:,.1f} m³</h2>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Weekly & Monthly — 100% correct
         filtered['Week'] = ((filtered['Date'] - pd.to_datetime(start_date)).dt.days // 7) + 1
         filtered['Month'] = filtered['Date'].dt.to_period('M').astype(str)
+        filtered['CumProd'] = filtered.groupby('Plant')['Production for the Day'].cumsum()
 
         weekly = filtered.groupby(['Week', 'Plant'], as_index=False)['Production for the Day'].sum()
         monthly = filtered.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-
-        # True accumulative per week/month
-        filtered['CumProd'] = filtered.groupby('Plant')['Production for the Day'].cumsum()
         weekly_acc = filtered.groupby(['Week', 'Plant'], as_index=False)['CumProd'].last()
         monthly_acc = filtered.groupby(['Month', 'Plant'], as_index=False)['CumProd'].last()
 
@@ -670,13 +671,8 @@ elif mode == "Analytics":
         st.subheader("Monthly True Accumulative")
         st.plotly_chart(aggregated_bar_chart(monthly_acc, "CumProd", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
-        # Final top
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
-
-
-
-
