@@ -589,7 +589,7 @@ latest_cumulative = monthly_acc_for_top3[
 latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
 
     # Average daily
-    avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
+avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
     top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
 
     # TOP 3 LEADERS
@@ -646,6 +646,7 @@ latest_cumulative = latest_cumulative.sort_values('Accumulative Production', asc
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
 
