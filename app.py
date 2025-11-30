@@ -577,14 +577,13 @@ elif mode == "Analytics":
     """, unsafe_allow_html=True)
 
     # CORRECT LATEST ACCUMULATIVE — NOW 100% ACCURATE
-    latest_cumulative = (
-        filtered_df
-        .groupby('Plant', as_index=False)
-        .tail(1)                                          # takes the very last (newest) row per plant
-        [['Plant', 'Accumulative Production']]
-        .sort_values('Accumulative Production', ascending=False)
-        .reset_index(drop=True)
-    )
+   # FINAL FIX — TOP 3 NOW = EXACTLY THE SAME AS MONTHLY ACCUMULATIVE CHART
+monthly_acc_for_top3 = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+latest_month = monthly_acc_for_top3['Month'].max()
+latest_cumulative = monthly_acc_for_top3[
+    monthly_acc_for_top3['Month'] == latest_month
+][['Plant', 'Accumulative Production']].copy()
+latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
 
     # Average daily
     avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
@@ -644,4 +643,5 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
