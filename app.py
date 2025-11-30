@@ -594,7 +594,7 @@ top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
 
     # TOP 3 LEADERS
 st.markdown("## TOP 3 LEADERS")
-    colA, colB = st.columns(2)
+colA, colB = st.columns(2)
 
     with colA:
         st.markdown("### Average Daily Production")
@@ -646,6 +646,7 @@ st.markdown("## TOP 3 LEADERS")
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
 
