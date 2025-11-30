@@ -29,49 +29,84 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========================================
-# COLLAPSIBLE SIDEBAR WITH TOGGLE BUTTON (ADDED)
+# COLLAPSIBLE SIDEBAR — FULLY WORKING (FIXED)
 # ========================================
 if "sidebar_state" not in st.session_state:
     st.session_state.sidebar_state = "expanded"
 
-def toggle_sidebar():
-    st.session_state.sidebar_state = "collapsed" if st.session_state.sidebar_state == "expanded" else "expanded"
-
+# Custom CSS for the floating Menu button
 st.markdown("""
 <style>
-    .sidebar-toggle {
+    .sidebar-toggle-btn {
         position: fixed;
-        top: 20px;
-        left: 20px;
+        top: 15px;
+        left: 15px;
         z-index: 999999;
-        background: #1e40af;
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
         color: white;
         border: none;
-        width: 60px;
-        height: 60px;
+        width: 70px;
+        height: 70px;
         border-radius: 50%;
         cursor: pointer;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-        font-size: 28px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+        font-size: 32px;
+        font-weight: bold;
         display: flex;
         align-items: center;
         justify-content: center;
         transition: all 0.3s ease;
+        font-family: Arial, sans-serif;
     }
-    .sidebar-toggle:hover {
-        background: #3b82f6;
-        transform: scale(1.15);
+    .sidebar-toggle-btn:hover {
+        background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        transform: scale(1.1);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    }
+    .sidebar-toggle-btn:active {
+        transform: scale(0.95);
     }
 </style>
 """, unsafe_allow_html=True)
 
-if st.button("Menu", key="sidebar_toggle", on_click=toggle_sidebar):
-    pass
-
-if st.session_state.sidebar_state == "collapsed":
-    st.markdown("<style>section[data-testid='stSidebar'] {display: none !important;}</style>", unsafe_allow_html=True)
+# The actual button — placed early so it's on top
+if st.session_state.sidebar_state == "expanded":
+    btn_label = "Close"
 else:
-    st.markdown("<style>section[data-testid='stSidebar'] {display: block !important;}</style>", unsafe_allow_html=True)
+    btn_label = "Menu"
+
+if st.button(btn_label, key="sidebar_toggle", help="Toggle sidebar"):
+    st.session_state.sidebar_state = "collapsed" if st.session_state.sidebar_state == "expanded" else "expanded"
+    st.rerun()
+
+# Now apply the hide/show logic AFTER the button
+if st.session_state.sidebar_state == "collapsed":
+    st.markdown("""
+    <style>
+        section[data-testid="stSidebar"] {
+            display: none !important;
+        }
+        .main > div {
+            padding-left: 1rem !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+        section[data-testid="stSidebar"] {
+            display: block !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Optional: Add a tiny floating indicator when collapsed
+if st.session_state.sidebar_state == "collapsed":
+    st.markdown(f"""
+    <div class="sidebar-toggle-btn">
+        Menu
+    </div>
+    """, unsafe_allow_html=True)
 
 # ========================================
 # DATA DIRECTORY
@@ -676,3 +711,4 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
