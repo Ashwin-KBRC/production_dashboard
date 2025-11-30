@@ -577,43 +577,98 @@ elif mode == "Analytics":
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-        filtered_df = all_df[
-            (all_df['Date'] >= pd.to_datetime(start_date)) &
-            (all_df['Date'] <= pd.to_datetime(end_date))
-        ].copy()
+        filtered = all_df[(all_df['Date'].dt.date >= start_date) & (all_df['Date'].dt.date <= end_date)].copy()
 
-        if filtered_df.empty:
+        if filtered.empty:
             st.warning("No data in selected range.")
             st.stop()
 
-        filtered_df = safe_numeric(filtered_df)
+        filtered = safe_numeric(filtered)
 
-        # STEP 1: Merge all Mutla entries per day first
-        # This creates one row per day with summed Mutla production
-        filtered_df['Plant_Clean'] = filtered_df['Plant'].astype(str).str.strip()
-        mutla_mask = filtered_df['Plant_Clean'].str.contains('mutla', case=False)
+        # MERGE MUTLA PROPERLY — ONE ROW PER DAY
+        filtered['Plant'] = filtered['Plant'].astype(str).str.strip()
+        filtered['Is_Mutla'] = filtered['Plant'].str.contains('mutla', case=False)
+        
+        if filtered['Is_Mutla'].any():
+            # Group by Date and sum Mutla production
+            mutla_daily = filtered[filtered['Is_Mutla']].groupby('Date')['Production for the Day'].sum().reset_index()
+            mutla_daily['Plant'] = 'Mutla'
+            mutla_daily['Accumulative Production'] = 0  # will be ignored
 
-        if mutla_mask.any():
-            # Group by date and sum Mutla production
-            mutla_per_day = filtered_df[mutla_mask].groupby('Date')['Production for the Day'].sum().reset_index()
-            mutla_per_day['Plant'] = 'Mutla'
-            mutla_per_day['Accumulative Production'] = 0  # will be recalculated later
+            # Remove all old Mutla rows
+            non_mutla = filtered[~filtered['Is_Mutla']].copy()
 
-            # Remove old Mutla rows
-            non_mutla = filtered_df[~mutla_mask].copy()
+            # Combine: one Mutla row per day
+            filtered = pd.concat([non_mutla, mutla_daily], ignore_index=True)
 
-            # Combine back
-            filtered_df = pd.concat([non_mutla, mutla_per_day], ignore_index=True)
+        # Now calculate TRUE totals and averages
+        total_by_plant = filtered.groupby('Plant')['Production for the Day'].sum()
+        days_active = filtered.groupby('Plant')['Date'].nunique()
+        avg_daily = (total_by_plant / days_active.replace(0, 1)).round(1)
 
-        # STEP 2: Now we have clean data → calculate TRUE totals
-        filtered_df = filtered_df.sort_values(['Plant', 'Date'])
+        # Top 3
+        top_avg = avg_daily.nlargest(3)
+        top_total = total_by_plant.nlargest(3)
 
-        # True total production per plant (this is the real accumulative)
-        total_per_plant = filtered_df.groupby('Plant')['Production for the Day'].sum()
+        grand_total = filtered['Production for the Day'].sum()
 
-        # True average daily (only days the plant actually reported)
-        days_active = filtered_df.groupby('Plant')['Date'].nunique()
-        avg_daily = (total_per_plant / days_active.replace(0, 1)).round(1)
+        # Big total card
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 70px; border-radius: 40px; text-align: center; margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.45); font-family: 'Arial Black', sans-serif;">
+            <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
+            <h2 style="margin:35px 0; font-size:100px;">{grand_total:,.1f} m³</h2>
+            <p style="margin:0; font-size:32px;">{start_date.strftime('%b %d')} → {end_date.strftime('%b %d, %Y')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("## TOP 3 LEADERS")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### Average Daily Production")
+            for i, (plant, value) in enumerate(top_avg.items()):
+                rank = ["1st", "2nd", "3rd"][i]
+                color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
+                st.markdown(f"""
+                <div style="background:white; padding:30px; border-radius:20px; margin:15px 0; border-left:12px solid {color}; box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                    <h3 style="margin:0; color:{color}">{rank} • {plant}</h3>
+                    <h2 style="margin:10px 0 0">{value:,.1f} m³/day</h2>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("### Total Production (True Accumulative)")
+            for i, (plant, value) in enumerate(top_total.items()):
+                rank = ["1st", "2nd", "3rd"][i]
+                color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
+                st.markdown(f"""
+                <div style="background:white; padding:30px; border-radius:20px; margin:15px 0; border-left:12px solid {color}; box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                    <h3 style="margin:0; color:{color}">{rank} • {plant}</h3>
+                    <h2 style="margin:10px 0 0">{value:,.1f} m³</h2>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Weekly & Monthly — 100% correct
+        filtered['Week'] = ((filtered['Date'] - pd.to_datetime(start_date)).dt.days // 7) + 1
+        filtered['Month'] = filtered['Date'].dt.to_period('M').astype(str)
+
+        weekly = filtered.groupby(['Week', 'Plant'], as_index=False)['Production for the Day'].sum()
+        monthly = filtered.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
+
+        # True accumulative per week/month
+        filtered['CumProd'] = filtered.groupby('Plant')['Production for the Day'].cumsum()
+        weekly_acc = filtered.groupby(['Week', 'Plant'], as_index=False)['CumProd'].last()
+        monthly_acc = filtered.groupby(['Month', 'Plant'], as_index=False)['CumProd'].last()
+
+        st.markdown("---")
+        st.subheader("Weekly Production")
+        st.plotly_chart(aggregated_bar_chart(weekly, "Production for the Day", "Week", theme_colors, "Weekly Production"), use_container_width=True)
+        st.subheader("Monthly Production")
+        st.plotly_chart(aggregated_bar_chart(monthly, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
+        st.subheader("Weekly True Accumulative")
+        st.plotly_chart(aggregated_bar_chart(weekly_acc, "CumProd", "Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+        st.subheader("Monthly True Accumulative")
+        st.plotly_chart(aggregated_bar_chart(monthly_acc, "CumProd", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 
         # Final top
 # ========================================
@@ -621,6 +676,7 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
 
 
