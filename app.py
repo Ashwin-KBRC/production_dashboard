@@ -596,31 +596,31 @@ top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
 st.markdown("## TOP 3 LEADERS")
 colA, colB = st.columns(2)
 
-    with colA:
-        st.markdown("### Average Daily Production")
-        for i, row in top_avg.iterrows():
-            rank = ["1st", "2nd", "3rd"][i]
-            color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
-            st.markdown(f"""
-            <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
-                        border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
-                <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                <h2 style="margin:15px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
-            </div>
-            """, unsafe_allow_html=True)
+with colA:
+     st.markdown("### Average Daily Production")
+    for i, row in top_avg.iterrows():
+        rank = ["1st", "2nd", "3rd"][i]
+        color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
+        st.markdown(f"""
+        <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
+                    border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
+             <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
+            <h2 style="margin:15px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
+         </div>
+         """, unsafe_allow_html=True)
 
-    with colB:
-        st.markdown("### Latest Accumulative Production")
-        for i, row in latest_cumulative.head(3).iterrows():
-            rank = ["1st", "2nd", "3rd"][i]
-            color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
-            st.markdown(f"""
-            <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
-                        border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
-                <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                <h2 style="margin:15px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
-            </div>
-            """, unsafe_allow_html=True)
+with colB:
+    st.markdown("### Latest Accumulative Production")
+    for i, row in latest_cumulative.head(3).iterrows():
+        rank = ["1st", "2nd", "3rd"][i]
+        color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
+        st.markdown(f"""
+        <div style="background:white;padding:30px;border-radius:20px;margin:20px 0;
+                     border-left:15px solid {color};box-shadow:0 15px 35px rgba(0,0,0,0.2);text-align:center">
+            <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
+             <h2 style="margin:15px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
+        </div>
+         """, unsafe_allow_html=True)
 
     # Charts (unchanged — already correct)
     filtered_df['Custom_Week'] = ((filtered_df['Date'] - filtered_df['Date'].min()).dt.days // 7) + 1
@@ -646,6 +646,7 @@ colA, colB = st.columns(2)
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+
 
 
 
