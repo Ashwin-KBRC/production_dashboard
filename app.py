@@ -11,6 +11,7 @@ import plotly.express as px
 import streamlit as st
 import io
 import xlsxwriter
+
 # ========================================
 # PAGE CONFIG & REMOVE ALL STREAMLIT BRANDING
 # ========================================
@@ -26,9 +27,11 @@ st.markdown("""
     .st-emotion-cache-1a6n9b8 {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
+
 # ========================================
 # SECRETS & AUTH
 # ========================================
@@ -40,15 +43,18 @@ except Exception:
         SECRETS = dict(os.environ)
     except Exception:
         SECRETS = {}
+
 GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
 GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
 GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
+
 _default_users = {"admin": hashlib.sha256("kbrc123".encode()).hexdigest()}
 USERS: Dict[str, str] = _default_users.copy()
 if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
     for k, v in SECRETS["USERS"].items():
         USERS[k] = v
+
 # ========================================
 # THEMES
 # ========================================
@@ -76,15 +82,18 @@ WEEKLY_PALETTES = [
     ["#3498DB", "#5DADE2", "#85C1E2", "#AED6F1"],
     ["#F1C40F", "#F4D03F", "#F7DC6F", "#F9E79F"],
 ]
+
 if "theme" not in st.session_state:
     st.session_state["theme"] = "Lava Flow"
 elif st.session_state["theme"] not in COLOR_THEMES:
     st.session_state["theme"] = "Lava Flow"
+
 # ========================================
 # AUTH FUNCTIONS
 # ========================================
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
+
 def check_credentials(username: str, password: str) -> bool:
     if not username:
         return False
@@ -92,6 +101,7 @@ def check_credentials(username: str, password: str) -> bool:
     if user in USERS:
         return hash_password(password) == USERS[user]
     return False
+
 def login_ui():
     st.sidebar.subheader("Login")
     with st.sidebar.form("login_form"):
@@ -105,16 +115,19 @@ def login_ui():
                 st.rerun()
             else:
                 st.sidebar.error("Invalid username or password")
+
 def logout():
     if "logged_in" in st.session_state:
         del st.session_state["logged_in"]
     if "username" in st.session_state:
         del st.session_state["username"]
     st.rerun()
+
 def logged_in() -> bool:
     return st.session_state.get("logged_in", False)
+
 # ========================================
-# FILE I/O & GIT HELPERS
+# FILE HELPERS
 # ========================================
 def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False) -> Path:
     fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
@@ -123,19 +136,23 @@ def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False)
         raise FileExistsError(f"{fname} already exists.")
     df.to_csv(p, index=False, float_format="%.3f")
     return p
+
 def list_saved_dates() -> List[str]:
     return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv")], reverse=True)
+
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
     if not p.exists():
         raise FileNotFoundError(f"File not found: {date_str}")
     return pd.read_csv(p)
+
 def delete_saved(date_str: str) -> bool:
     p = DATA_DIR / f"{date_str}.csv"
     if p.exists():
         p.unlink()
         return True
     return False
+
 def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return False, "GitHub not configured."
@@ -159,6 +176,73 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return r.status_code in [200, 201], ("Success" if r.ok else r.json().get("message", "Failed"))
     except Exception as e:
         return False, str(e)
+
+# ========================================
+# MUTLA MERGE FUNCTION
+# ========================================
+def merge_mutla_plants(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["Plant"] = df["Plant"].astype(str).str.strip()
+    mask = df["Plant"].str.contains("mutla", case=False, na=False)
+    if mask.sum() > 1:
+        mutla_rows = df[mask]
+        other_rows = df[~mask]
+        combined = pd.DataFrame([{
+            "Plant": "Mutla",
+            "Production for the Day": mutla_rows["Production for the Day"].sum(),
+            "Accumulative Production": mutla_rows["Accumulative Production"].sum(),
+            "Date": mutla_rows["Date"].iloc[0] if "Date" in mutla_rows.columns else None
+        }])
+        df = pd.concat([other_rows, combined], ignore_index=True)
+    return df
+
+# ========================================
+# DATA HELPERS
+# ========================================
+def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    df2 = df.copy()
+    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
+    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
+    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(method='ffill').fillna(0)
+    return df2
+
+def generate_excel_report(df: pd.DataFrame, date_str: str):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
+    output.seek(0)
+    return output
+
+# ========================================
+# LOGIN CHECK
+# ========================================
+if not logged_in():
+    st.title("Production Dashboard — Login required")
+    login_ui()
+    st.sidebar.write("---")
+    st.sidebar.caption("If you don't have credentials, please contact the admin.")
+    st.stop()
+
+# ========================================
+# MAIN UI
+# ========================================
+st.sidebar.title("Controls")
+st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
+if st.sidebar.button("Logout"):
+    logout()
+
+mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
+theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
+if theme_choice != st.session_state["theme"]:
+    st.session_state["theme"] = theme_choice
+    st.rerun()
+
+theme_colors = COLOR_THEMES[theme_choice]
+alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
+st.sidebar.markdown("---")
+st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
+st.title("PRODUCTION FOR THE DAY")
+
 # ========================================
 # PLOT HELPERS (unchanged)
 # ========================================
@@ -169,6 +253,7 @@ def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
     fig.update_layout(title_font=dict(family="Arial", size=18), legend_font=dict(size=16), margin=dict(t=60, b=40, l=40, r=40))
     return fig
+
 def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -192,6 +277,7 @@ def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         yaxis_tickfont=dict(size=12)
     )
     return fig
+
 def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -211,6 +297,7 @@ def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         yaxis_gridcolor="#E0E0E0"
     )
     return fig
+
 def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -223,6 +310,7 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
         yaxis_gridcolor="#E0E0E0"
     )
     return fig
+
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -291,50 +379,9 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         trace.textfont.family = text_families
         current_idx += trace_len
     return fig
-# ========================================
-# DATA HELPERS
-# ========================================
-def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
-    df2 = df.copy()
-    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
-    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
-    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(method='ffill').fillna(0)
-    return df2
-def generate_excel_report(df: pd.DataFrame, date_str: str):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
-    output.seek(0)
-    return output
-# ========================================
-# LOGIN CHECK
-# ========================================
-if not logged_in():
-    st.title("Production Dashboard — Login required")
-    login_ui()
-    st.sidebar.write("---")
-    st.sidebar.caption("If you don't have credentials, please contact the admin.")
-    st.stop()
-# ========================================
-# MAIN UI
-# ========================================
-st.sidebar.title("Controls")
-st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
-if st.sidebar.button("Logout"):
-    logout()
-mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
-if theme_choice != st.session_state["theme"]:
-    st.session_state["theme"] = theme_choice
-    st.rerun()
-theme_colors = COLOR_THEMES[theme_choice]
-alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
-st.sidebar.markdown("---")
-st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
-st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# UPLOAD MODE (100% unchanged)
+# UPLOAD MODE
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -369,18 +416,41 @@ if mode == "Upload New Data":
                     st.success(message)
                 else:
                     st.warning(message)
+
                 df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                 df_display = safe_numeric(df_display)
-                st.markdown("### Totals")
+                df_display = merge_mutla_plants(df_display)  # Merge Mutla
+
                 total_daily = df_display["Production for the Day"].sum()
                 total_acc = df_display["Accumulative Production"].sum()
-                st.write(f"- Daily: **{total_daily:,.1f} m³**")
+
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #7c3aed, #a78bfa);
+                    color: white;
+                    padding: 70px;
+                    border-radius: 40px;
+                    text-align: center;
+                    margin: 40px 0;
+                    box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+                    font-family: 'Arial Black', sans-serif;
+                ">
+                    <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
+                    <h2 style="margin:35px 0; font-size:100px;">{total_daily:,.1f} m³</h2>
+                    <p style="margin:0; font-size:32px;">
+                        {selected_date.strftime('%A, %B %d, %Y')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
                 st.write(f"- Accumulative: **{total_acc:,.1f} m³**")
+
                 alerts = df_display[df_display["Production for the Day"] < alert_threshold]
                 if not alerts.empty:
                     st.warning("Below threshold:")
                     for _, r in alerts.iterrows():
                         st.write(f"- {r['Plant']}: {r['Production for the Day']:.1f} m³")
+
                 st.markdown("### Charts")
                 c1, c2 = st.columns(2)
                 with c1:
@@ -389,22 +459,20 @@ if mode == "Upload New Data":
                     st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Daily Production"), use_container_width=True)
                 st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Daily Trend"), use_container_width=True)
                 st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Daily Flow"), use_container_width=True)
-                st.markdown("#### Accumulative Production — From Uploaded Excel")
+
                 acc_df = df_display[["Plant", "Accumulative Production"]].copy()
                 acc_df = acc_df.sort_values("Accumulative Production", ascending=False)
                 st.plotly_chart(bar_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Production"), use_container_width=True)
+
                 top = df_display.loc[df_display["Production for the Day"].idxmax()]
                 st.success(f"Top: {top['Plant']} — {top['Production for the Day']:.1f} m³")
+
                 excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
-                st.download_button(
-                    "Download Excel",
-                    excel_file,
-                    f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                st.download_button("Download Excel", excel_file, f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx",
+                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# VIEW HISTORICAL DATA → NOW WITH BIG TOTAL BOX
+# VIEW HISTORICAL DATA
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -418,13 +486,14 @@ elif mode == "View Historical Data":
         if selected not in saved_list:
             st.warning("No data for this date.")
             st.stop()
+
         df_hist = load_saved(selected)
         df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
         df_hist_disp = safe_numeric(df_hist_disp)
+        df_hist_disp = merge_mutla_plants(df_hist_disp)
 
         total_daily = df_hist_disp["Production for the Day"].sum()
 
-        # ← NEW: BIG TOTAL BOX FOR SINGLE DAY
         st.markdown(f"""
         <div style="
             background: linear-gradient(135deg, #7c3aed, #a78bfa);
@@ -437,7 +506,7 @@ elif mode == "View Historical Data":
             font-family: 'Arial Black', sans-serif;
         ">
             <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
-            <h2 style="margin:35px 0; font-size:100px;">{total_daily:,.0f} m³</h2>
+            <h2 style="margin:35px 0; font-size:100px;">{total_daily:,.1f} m³</h2>
             <p style="margin:0; font-size:32px;">
                 {selected_date.strftime('%A, %B %d, %Y')}
             </p>
@@ -451,22 +520,19 @@ elif mode == "View Historical Data":
         st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
-        st.markdown("#### Accumulative Production — From Saved File")
+
         acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
         acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
         st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
         st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
         st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
+
         excel_file = generate_excel_report(df_hist_disp, selected)
-        st.download_button(
-            "Download Excel",
-            excel_file,
-            f"report_{selected}.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        st.download_button("Download Excel", excel_file, f"report_{selected}.xlsx",
+                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ========================================
-# MANAGE DATA (100% unchanged)
+# MANAGE DATA
 # ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
@@ -502,7 +568,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — CLEANED & CORRECTED
+# ANALYTICS
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -515,18 +581,20 @@ elif mode == "Analytics":
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
+
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+        filtered_df = all.side = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
         if filtered_df.empty:
             st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
+            filtered_df = merge_mutla_plants(filtered_df)
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
 
-            # ← ONLY TOTAL DAILY PRODUCTION (no accumulative in big box)
             total_daily_all = filtered_df["Production for the Day"].sum()
+
             st.markdown(f"""
             <div style="
                 background: linear-gradient(135deg, #1e40af, #3b82f6);
@@ -539,14 +607,13 @@ elif mode == "Analytics":
                 font-family: 'Arial Black', sans-serif;
             ">
                 <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
-                <h2 style="margin:35px 0; font-size:100px;">{total_daily_all:,.0f} m³</h2>
+                <h2 style="margin:35px 0; font-size:100px;">{total_daily_all:,.1f} m³</h2>
                 <p style="margin:0; font-size:32px;">
-                    {start_date.strftime('%b %d')} → {end_date.strftime('%b %d, %Y')} • All Plants
+                    {start_date.strftime('%b %d')} to {end_date.strftime('%b %d, %Y')} • All Plants
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
-            # ← CORRECT: Average Daily + Latest Accumulative
             avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
             top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
             latest_acc = filtered_df.groupby('Plant')['Accumulative Production'].last()
@@ -575,19 +642,20 @@ elif mode == "Analytics":
                     <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
                                 border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
                         <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                        <h2 style="margin:10px 0 0">{row['Accumulative Production']:,.0f} m³</h2>
+                        <h2 style="margin:10px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
                     </div>
                     """, unsafe_allow_html=True)
 
-            # Rest of analytics unchanged
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+
             st.markdown("---")
             st.subheader(f"Weekly Production — {start_date} to {end_date}")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
