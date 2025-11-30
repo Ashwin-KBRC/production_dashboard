@@ -178,7 +178,46 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# PLOT HELPERS (unchanged)
+# MUTLA MERGE FUNCTION
+# ========================================
+def merge_mutla_plants(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "Plant" not in df.columns:
+        return df
+    df["Plant"] = df["Plant"].astype(str).str.strip()
+    mask = df["Plant"].str.contains("mutla", case=False, na=False)
+    if mask.sum() > 1:
+        mutla_rows = df[mask]
+        non_mutla = df[~mask]
+        merged = pd.DataFrame([{
+            "Plant": "Mutla",
+            "Production for the Day": mutla_rows["Production for the Day"].sum(),
+            "Accumulative Production": mutla_rows["Accumulative Production"].max(),
+            "Date": mutla_rows["Date"].iloc[0] if "Date" in mutla_rows.columns else None
+        }])
+        df = pd.concat([non_mutla, merged], ignore_index=True)
+    df["Plant"] = df["Plant"].str.title()
+    return df
+
+# ========================================
+# DATA HELPERS
+# ========================================
+def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    df2 = df.copy()
+    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
+    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
+    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(method='ffill').fillna(0)
+    return df2
+
+def generate_excel_report(df: pd.DataFrame, date_str: str):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
+    output.seek(0)
+    return output
+
+# ========================================
+# PLOT HELPERS (unchanged + KABD highlight)
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
@@ -245,9 +284,6 @@ def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     )
     return fig
 
-# ========================================
-# FIXED aggregated_bar_chart — REPLACE THIS ENTIRE FUNCTION
-# ========================================
 def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
     df = df.copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -290,7 +326,7 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         group_key = str(trace.name)
         if group_key not in palette_map:
             continue
-        palette = palette_map[group_key]  # ← FIXED LINE
+        palette = palette_map[group_key]
         trace_len = len(trace.x)
         colors = []
         text_colors = []
@@ -316,46 +352,6 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         trace.textfont.family = text_families
         current_idx += trace_len
     return fig
-
-# ========================================
-# NEW: MUTLA MERGE FUNCTION
-# ========================================
-def merge_mutla_plants(df: pd.DataFrame) -> pd.DataFrame:
-    """Merge all plants containing 'mutla' (case-insensitive) into one 'Mutla'"""
-    df = df.copy()
-    if "Plant" not in df.columns:
-        return df
-    df["Plant"] = df["Plant"].astype(str).str.strip()
-    mask = df["Plant"].str.contains("mutla", case=False, na=False)
-    if mask.sum() > 1:
-        mutla_rows = df[mask]
-        non_mutla = df[~mask]
-        merged = pd.DataFrame([{
-            "Plant": "Mutla",
-            "Production for the Day": mutla_rows["Production for the Day"].sum(),
-            "Accumulative Production": mutla_rows["Accumulative Production"].max(),
-            "Date": mutla_rows["Date"].iloc[0] if "Date" in mutla_rows.columns else None
-        }])
-        df = pd.concat([non_mutla, merged], ignore_index=True)
-    df["Plant"] = df["Plant"].str.title()
-    return df
-
-# ========================================
-# DATA HELPERS
-# ========================================
-def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
-    df2 = df.copy()
-    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
-    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
-    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(method='ffill').fillna(0)
-    return df2
-
-def generate_excel_report(df: pd.DataFrame, date_str: str):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
-    output.seek(0)
-    return output
 
 # ========================================
 # LOGIN CHECK
@@ -387,7 +383,7 @@ st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the D
 st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# UPLOAD MODE — NOW WITH MUTLA MERGE + 1 DECIMAL
+# UPLOAD MODE
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -425,7 +421,7 @@ if mode == "Upload New Data":
 
                 df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                 df_display = safe_numeric(df_display)
-                df_display = merge_mutla_plants(df_display)  # ← MUTLA MERGED
+                df_display = merge_mutla_plants(df_display)
                 st.markdown("### Totals")
                 total_daily = df_display["Production for the Day"].sum()
                 total_acc = df_display["Accumulative Production"].sum()
@@ -464,7 +460,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL DATA — MUTLA MERGED + 1 DECIMAL
+# VIEW HISTORICAL DATA
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -481,7 +477,7 @@ elif mode == "View Historical Data":
         df_hist = load_saved(selected)
         df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
         df_hist_disp = safe_numeric(df_hist_disp)
-        df_hist_disp = merge_mutla_plants(df_hist_disp)  # ← MUTLA MERGED
+        df_hist_disp = merge_mutla_plants(df_hist_disp)
         total_daily = df_hist_disp["Production for the Day"].sum()
 
         st.markdown(f"""
@@ -527,7 +523,7 @@ elif mode == "View Historical Data":
         )
 
 # ========================================
-# MANAGE DATA (unchanged)
+# MANAGE DATA
 # ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
@@ -563,7 +559,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — FIXED & PERFECT TOP 3
+# ANALYTICS — FINAL & PERFECT
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -586,11 +582,7 @@ elif mode == "Analytics":
             st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
-
-            # STEP 1: Merge Mutla BEFORE any grouping
             filtered_df = merge_mutla_plants(filtered_df)
-
-            # STEP 2: Now group correctly
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
 
             total_daily_all = filtered_df["Production for the Day"].sum()
@@ -614,14 +606,14 @@ elif mode == "Analytics":
             </div>
             """, unsafe_allow_html=True)
 
-            # CORRECT Top 3 — Mutla now calculated properly
-            daily_by_plant = filtered_df.groupby('Plant')['Production for the Day'].sum()
-            count_days = filtered_df.groupby('Plant')['Date'].nunique()
-            avg_daily = (daily_by_plant / count_days).round(1)
-            top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
+            # CORRECT & BULLETPROOF TOP 3
+            daily_sum = filtered_df.groupby('Plant')['Production for the Day'].sum()
+            days_count = filtered_df.groupby('Plant').size()
+            avg_daily = (daily_sum / days_count).round(1)
+            top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index(name="Avg_Daily")
 
             latest_acc = filtered_df.groupby('Plant')['Accumulative Production'].last()
-            top_acc = latest_acc.sort_values(ascending=False).head(3).reset_index()
+            top_acc = latest_acc.sort_values(ascending=False).head(3).reset_index(name="Latest_Acc")
 
             st.markdown("## TOP 3 LEADERS")
             colA, colB = st.columns(2)
@@ -635,7 +627,7 @@ elif mode == "Analytics":
                     <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
                                 border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
                         <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                        <h2 style="margin:10px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
+                        <h2 style="margin:10px 0 0">{row['Avg_Daily']:,.1f} m³/day</h2>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -648,11 +640,11 @@ elif mode == "Analytics":
                     <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
                                 border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
                         <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                        <h2 style="margin:10px 0 0">{row['Accumulative Production']:,.1f} m³</h2>
+                        <h2 style="margin:10px 0 0">{row['Latest_Acc']:,.1f} m³</h2>
                     </div>
                     """, unsafe_allow_html=True)
 
-            # Rest of analytics (weekly/monthly) stays exactly the same
+            # Weekly & Monthly Charts
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
 
@@ -679,5 +671,3 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
-
-
