@@ -573,36 +573,45 @@ elif mode == "Analytics":
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
 
+        # Load all data
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
-        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & 
+                            (all_df['Date'] <= pd.to_datetime(end_date))]
 
         if filtered_df.empty:
             st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
 
-            # CRITICAL: Merge Mutla BEFORE any calculations
-            filtered_df = merge_mutla_plants(filtered_df)
+            # FIRST: Identify and merge Mutla BEFORE any grouping
+            mutla_mask = filtered_df['Plant'].astype(str).str.contains('mutla', case=False, na=False)
+            if mutla_mask.any():
+                # Create merged Mutla row with correct daily sum and list of dates
+                mutla_data = filtered_df[mutla_mask].copy()
+                merged_mutla = pd.DataFrame([{
+                    'Plant': 'Mutla',
+                    'Production for the Day': mutla_data['Production for the Day'].sum(),
+                    'Accumulative Production': mutla_data['Production for the Day'].sum(),  # will be recalculated later
+                    'Date': mutla_data['Date'].dt.date.tolist()  # keep all dates for counting
+                }])
+                # Remove old Mutla rows, add merged one
+                filtered_df = pd.concat([filtered_df[~mutla_mask], merged_mutla], ignore_index=True)
 
-            # Now calculate REAL accumulative for each plant (sum of daily production)
-            filtered_df = filtered_df.sort_values(['Plant', 'Date'])
+            # Now convert Date back to datetime for grouping (except Mutla which has list)
+            filtered_df['Date'] = pd.to_datetime(filtered_df['Date'], errors='coerce')
+
+            # Recalculate TRUE accumulative (sum of daily production per plant)
             filtered_df['True_Accumulative'] = filtered_df.groupby('Plant')['Production for the Day'].cumsum()
 
             total_production = filtered_df["Production for the Day"].sum()
 
             st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, #1e40af, #3b82f6);
-                color: white;
-                padding: 70px;
-                border-radius: 40px;
-                text-align: center;
-                margin: 40px 0;
-                box-shadow: 0 25px 60px rgba(0,0,0,0.45);
-                font-family: 'Arial Black', sans-serif;
-            ">
+            <div style="background: linear-gradient(135deg, #1e40af, #3b82f6);
+                        color: white; padding: 70px; border-radius: 40px; text-align: center;
+                        margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.45);
+                        font-family: 'Arial Black', sans-serif;">
                 <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
                 <h2 style="margin:35px 0; font-size:100px;">{total_production:,.1f} m³</h2>
                 <p style="margin:0; font-size:32px;">
@@ -611,15 +620,19 @@ elif mode == "Analytics":
             </div>
             """, unsafe_allow_html=True)
 
-            # CORRECT AVERAGE DAILY
-            daily_sum = filtered_df.groupby('Plant')['Production for the Day'].sum()
-            days_active = filtered_df.groupby('Plant')['Date'].nunique()
-            avg_daily = (daily_sum / days_active).round(1)
+            # CORRECT AVERAGE DAILY (using actual number of days each plant reported)
+            plant_daily_sum = filtered_df.groupby('Plant')['Production for the Day'].sum()
+            # Count unique dates per plant — special handling for merged Mutla
+            days_per_plant = filtered_df.groupby('Plant')['Date'].apply(
+                lambda x: len(set(d.date() for d in x if pd.notnull(d))) if x.dtype == 'object' 
+                else x.dt.date.nunique()
+            )
+            avg_daily = (plant_daily_sum / days_per_plant.replace(0, 1)).round(1)
             top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index(name="Avg_Daily")
 
-            # CORRECT ACCUMULATIVE = TOTAL PRODUCTION PER PLANT
-            true_total_per_plant = filtered_df.groupby('Plant')['Production for the Day'].sum()
-            top_acc = true_total_per_plant.sort_values(ascending=False).head(3).reset_index(name="Total_Produced")
+            # TRUE TOTAL PRODUCTION PER PLANT
+            total_per_plant = filtered_df.groupby('Plant')['Production for the Day'].sum()
+            top_acc = total_per_plant.sort_values(ascending=False).head(3).reset_index(name="Total_Produced")
 
             st.markdown("## TOP 3 LEADERS")
             colA, colB = st.columns(2)
@@ -650,11 +663,10 @@ elif mode == "Analytics":
                     </div>
                     """, unsafe_allow_html=True)
 
-            # WEEKLY & MONTHLY — NOW SHOWS MUTLA CORRECTLY
-            def assign_custom_week(date, start):
-                return (date - pd.to_datetime(start)).days // 7 + 1
-
-            filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
+            # WEEKLY & MONTHLY CHARTS — NOW 100% CORRECT
+            filtered_df['Custom_Week'] = filtered_df['Date'].apply(
+                lambda x: ((pd.to_datetime(x) - pd.to_datetime(start_date)).days // 7) + 1 if pd.notnull(x) else None
+            )
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
 
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
@@ -663,20 +675,18 @@ elif mode == "Analytics":
             monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['True_Accumulative'].last()
 
             st.markdown("---")
-            st.subheader(f"Weekly Production — {start_date} to {end_date}")
+            st.subheader("Weekly Production")
             st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production"), use_container_width=True)
-            
-            st.subheader(f"Monthly Production — {start_date} to {end_date}")
+            st.subheader("Monthly Production")
             st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
-            
-            st.subheader(f"Weekly True Accumulative")
+            st.subheader("Weekly True Accumulative")
             st.plotly_chart(aggregated_bar_chart(weekly_acc, "True_Accumulative", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
-            
-            st.subheader(f"Monthly True Accumulative")
+            st.subheader("Monthly True Accumulative")
             st.plotly_chart(aggregated_bar_chart(monthly_acc, "True_Accumulative", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
