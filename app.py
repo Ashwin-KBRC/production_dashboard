@@ -29,86 +29,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========================================
-# COLLAPSIBLE SIDEBAR — FULLY WORKING (FIXED)
-# ========================================
-if "sidebar_state" not in st.session_state:
-    st.session_state.sidebar_state = "expanded"
-
-# Custom CSS for the floating Menu button
-st.markdown("""
-<style>
-    .sidebar-toggle-btn {
-        position: fixed;
-        top: 15px;
-        left: 15px;
-        z-index: 999999;
-        background: linear-gradient(135deg, #1e40af, #3b82f6);
-        color: white;
-        border: none;
-        width: 70px;
-        height: 70px;
-        border-radius: 50%;
-        cursor: pointer;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-        font-size: 32px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-        font-family: Arial, sans-serif;
-    }
-    .sidebar-toggle-btn:hover {
-        background: linear-gradient(135deg, #3b82f6, #60a5fa);
-        transform: scale(1.1);
-        box-shadow: 0 12px 30px rgba(0,0,0,0.6);
-    }
-    .sidebar-toggle-btn:active {
-        transform: scale(0.95);
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# The actual button — placed early so it's on top
-if st.session_state.sidebar_state == "expanded":
-    btn_label = "Close"
-else:
-    btn_label = "Menu"
-
-if st.button(btn_label, key="sidebar_toggle", help="Toggle sidebar"):
-    st.session_state.sidebar_state = "collapsed" if st.session_state.sidebar_state == "expanded" else "expanded"
-    st.rerun()
-
-# Now apply the hide/show logic AFTER the button
-if st.session_state.sidebar_state == "collapsed":
-    st.markdown("""
-    <style>
-        section[data-testid="stSidebar"] {
-            display: none !important;
-        }
-        .main > div {
-            padding-left: 1rem !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <style>
-        section[data-testid="stSidebar"] {
-            display: block !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Optional: Add a tiny floating indicator when collapsed
-if st.session_state.sidebar_state == "collapsed":
-    st.markdown(f"""
-    <div class="sidebar-toggle-btn">
-        Menu
-    </div>
-    """, unsafe_allow_html=True)
-
-# ========================================
 # DATA DIRECTORY
 # ========================================
 DATA_DIR = Path("data")
@@ -301,7 +221,7 @@ def generate_excel_report(df: pd.DataFrame, date_str: str):
     return output
 
 # ========================================
-# ALL CHART FUNCTIONS (100% COMPLETE)
+# PLOT HELPERS (FULLY PRESERVED)
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
@@ -448,7 +368,7 @@ if not logged_in():
     st.stop()
 
 # ========================================
-# MAIN UI
+# MAIN UI — SIDEBAR FIXED (NO COLLAPSE)
 # ========================================
 st.sidebar.title("Controls")
 st.sidebar.write(f"Logged in as: **{st.session_state.get('username', '-')}**")
@@ -456,18 +376,20 @@ if st.sidebar.button("Logout"):
     logout()
 
 mode = st.sidebar.radio("Mode", ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"], index=1)
+
 theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
 if theme_choice != st.session_state["theme"]:
     st.session_state["theme"] = theme_choice
     st.rerun()
 theme_colors = COLOR_THEMES[theme_choice]
+
 alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
 st.sidebar.markdown("---")
 st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the Day, Accumulative Production.")
 st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# ALL MODES — FULLY PRESERVED
+# UPLOAD MODE
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -537,6 +459,9 @@ if mode == "Upload New Data":
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
+# ========================================
+# VIEW HISTORICAL DATA
+# ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
     saved_list = list_saved_dates()
@@ -555,10 +480,21 @@ elif mode == "View Historical Data":
         df_hist_disp = merge_mutla_plants(df_hist_disp)
         total_daily = df_hist_disp["Production for the Day"].sum()
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #7c3aed, #a78bfa); color: white; padding: 70px; border-radius: 40px; text-align: center; margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.4); font-family: 'Arial Black', sans-serif;">
+        <div style="
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            color: white;
+            padding: 70px;
+            border-radius: 40px;
+            text-align: center;
+            margin: 40px 0;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+            font-family: 'Arial Black', sans-serif;
+        ">
             <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
             <h2 style="margin:35px 0; font-size:100px;">{total_daily:,.1f} m³</h2>
-            <p style="margin:0; font-size:32px;">{selected_date.strftime('%A, %B %d, %Y')}</p>
+            <p style="margin:0; font-size:32px;">
+                {selected_date.strftime('%A, %B %d, %Y')}
+            </p>
         </div>
         """, unsafe_allow_html=True)
         st.subheader(f"Data for {selected}")
@@ -582,6 +518,9 @@ elif mode == "View Historical Data":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+# ========================================
+# MANAGE DATA
+# ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
     saved_list = list_saved_dates()
@@ -615,6 +554,9 @@ elif mode == "Manage Data":
                     except Exception as e:
                         st.error(f"Error: {e}")
 
+# ========================================
+# ANALYTICS — MUTLA 100% CORRECT
+# ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
     saved = list_saved_dates()
@@ -639,7 +581,7 @@ elif mode == "Analytics":
         filtered = safe_numeric(filtered)
         filtered['Plant'] = filtered['Plant'].astype(str).str.strip()
 
-        # 100% CORRECT MUTLA MERGE — ONE ROW PER DAY
+        # FIXED: Proper Mutla merge — one row per day
         mutla_mask = filtered['Plant'].str.contains('mutla', case=False, na=False)
         if mutla_mask.any():
             mutla_daily = filtered[mutla_mask].groupby('Date')['Production for the Day'].sum().reset_index()
@@ -711,4 +653,3 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
-
