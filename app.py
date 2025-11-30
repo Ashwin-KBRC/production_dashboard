@@ -563,7 +563,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — MUTLA MERGED + 1 DECIMAL EVERYWHERE
+# ANALYTICS — FIXED & PERFECT TOP 3
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -576,16 +576,23 @@ elif mode == "Analytics":
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
+
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
         filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+
         if filtered_df.empty:
             st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
-            filtered_df = merge_mutla_plants(filtered_df)  # ← MUTLA MERGED
+
+            # STEP 1: Merge Mutla BEFORE any grouping
+            filtered_df = merge_mutla_plants(filtered_df)
+
+            # STEP 2: Now group correctly
             filtered_df = filtered_df.sort_values(['Plant', 'Date'])
+
             total_daily_all = filtered_df["Production for the Day"].sum()
 
             st.markdown(f"""
@@ -607,13 +614,18 @@ elif mode == "Analytics":
             </div>
             """, unsafe_allow_html=True)
 
-            avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
+            # CORRECT Top 3 — Mutla now calculated properly
+            daily_by_plant = filtered_df.groupby('Plant')['Production for the Day'].sum()
+            count_days = filtered_df.groupby('Plant')['Date'].nunique()
+            avg_daily = (daily_by_plant / count_days).round(1)
             top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
+
             latest_acc = filtered_df.groupby('Plant')['Accumulative Production'].last()
             top_acc = latest_acc.sort_values(ascending=False).head(3).reset_index()
 
             st.markdown("## TOP 3 LEADERS")
             colA, colB = st.columns(2)
+
             with colA:
                 st.markdown("### Average Daily Production")
                 for i, row in top_avg.iterrows():
@@ -626,6 +638,7 @@ elif mode == "Analytics":
                         <h2 style="margin:10px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
                     </div>
                     """, unsafe_allow_html=True)
+
             with colB:
                 st.markdown("### Latest Accumulative Production")
                 for i, row in top_acc.iterrows():
@@ -639,10 +652,13 @@ elif mode == "Analytics":
                     </div>
                     """, unsafe_allow_html=True)
 
+            # Rest of analytics (weekly/monthly) stays exactly the same
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
+
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
@@ -663,4 +679,5 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
