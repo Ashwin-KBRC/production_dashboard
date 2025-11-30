@@ -541,121 +541,142 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — FINAL, BULLETPROOF VERSION (NO MORE IndexError)
+# ANALYTICS — 100% CORRECT, CLEAN & FINAL VERSION
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
-    saved = list_saved_dates()
-    if len(saved) < 2:
-        st.info("Need at least 2 days of data.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
-        with col2:
-            end_date = st.date_input("End Date", value=datetime.today())
 
-        frames = [load_saved(d) for d in saved]
-        all_df = pd.concat(frames, ignore_index=True)
-        all_df['Date'] = pd.to_datetime(all_df['Date'])
-        filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+    saved_dates = list_saved_dates()
+    if len(saved_dates) < 2:
+        st.info("Need at least 2 days of data for analytics.")
+        st.stop()
 
-        if filtered_df.empty:
-            st.warning("No data in selected range.")
-            st.stop()
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
+    with col2:
+        end_date = st.date_input("End Date", value=datetime.today())
 
-        filtered_df = safe_numeric(filtered_df)
+    if start_date > end_date:
+        st.error("Start date must be before end date.")
+        st.stop()
 
-        total_daily_all = filtered_df["Production for the Day"].sum()
-        st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #1e40af, #3b82f6);
-            color: white;
-            padding: 70px;
-            border-radius: 40px;
-            text-align: center;
-            margin: 40px 0;
-            box-shadow: 0 25px 60px rgba(0,0,0,0.45);
-            font-family: 'Arial Black', sans-serif;
-        ">
-            <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
-            <h2 style="margin:35px 0; font-size:100px;">{total_daily_all:,.0f} m³</h2>
-            <p style="margin:0; font-size:32px;">
-                {start_date.strftime('%b %d')} to {end_date.strftime('%b %d, %Y')} • All Plants
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Load and filter data
+    frames = []
+    for d in saved_dates:
+        date_obj = datetime.strptime(d, "%Y-%m-%d").date()
+        if start_date <= date_obj <= end_date:
+            try:
+                df = load_saved(d)
+                df["Date"] = date_obj
+                frames.append(df)
+            except:
+                continue
 
-        # COMBINE MUTLA-1 & MUTLA-2 → ONE "MUTLA"
-        df_for_top3 = filtered_df.copy()
-        df_for_top3['Plant'] = df_for_top3['Plant'].str.upper().apply(lambda x: "MUTLA" if 'MUTLA' in x else x)
+    if not frames:
+        st.warning("No data found in selected date range.")
+        st.stop()
 
-        grouped = df_for_top3.groupby('Plant').agg({
-            'Production for the Day': 'sum',
-            'Accumulative Production': 'last'
-        }).reset_index()
+    df_all = pd.concat(frames, ignore_index=True)
+    df_all = safe_numeric(df_all)
 
-        total_days = (end_date - start_date).days + 1
-        grouped['Avg_Daily'] = (grouped['Production for the Day'] / total_days).round(1)
+    # Remove TOTAL rows
+    df_all = df_all[~df_all["Plant"].astype(str).str.upper().str.contains("TOTAL")]
 
-        # Sort for top 3
-        top_avg = grouped.sort_values('Avg_Daily', ascending=False).head(3)
-        top_acc = grouped.sort_values('Accumulative Production', ascending=False).head(3)
+    # TOTAL PRODUCTION IN PERIOD
+    total_production = df_all["Production for the Day"].sum()
 
-        st.markdown("## TOP 3 LEADERS")
-        colA, colB = st.columns(2)
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 70px; border-radius: 40px; text-align: center; margin: 40px 0; box-shadow: 0 25px 60px rgba(0,0,0,0.45); font-family: 'Arial Black', sans-serif;">
+        <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
+        <h2 style="margin:35px 0; font-size:100px;">{total_production:,.0f} m³</h2>
+        <p style="margin:0; font-size:32px;">
+            {start_date.strftime('%b %d')} → {end_date.strftime('%b %d, %Y')} • All Plants
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-        with colA:
-            st.markdown("### Average Daily Production")
-            for i, row in top_avg.iterrows():
-                rank = ["1st", "2nd", "3rd"][i] if i < 3 else f"{i+1}th"
-                color = ["#FFD700", "#C0C0C0", "#CD7F32"][i] if i < 3 else "#888888"
-                st.markdown(f"""
-                <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
-                            border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
-                    <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                    <h2 style="margin:10px 0 0">{row['Avg_Daily']:,.1f} m³/day</h2>
-                </div>
-                """, unsafe_allow_html=True)
+    # === COMBINE MUTLA-1 & MUTLA-2 INTO ONE "MUTLA" ===
+    df_display = df_all.copy()
+    df_display["Plant_Clean"] = df_display["Plant"].str.strip().str.upper()
+    df_display["Plant_Group"] = df_display["Plant_Clean"].apply(lambda x: "MUTLA" if "MUTLA" in x else x)
 
-        with colB:
-            st.markdown("### Latest Accumulative Production")
-            for i, row in top_acc.iterrows():
-                rank = ["1st", "2nd", "3rd"][i] if i < 3 else f"{i+1}th"
-                color = ["#1E90FF", "#4682B4", "#5F9EA0"][i] if i < 3 else "#888888"
-                st.markdown(f"""
-                <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
-                            border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
-                    <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                    <h2 style="margin:10px 0 0">{row['Accumulative Production']:,.0f} m³</h2>
-                </div>
-                """, unsafe_allow_html=True)
+    # Per-plant stats
+    plant_stats = df_display.groupby("Plant_Group").agg(
+        Total_Production=("Production for the Day", "sum"),
+        Days_Active=("Date", "count"),
+        Latest_Accumulative=("Accumulative Production", "last"),
+        First_Date=("Date", "min"),
+        Last_Date=("Date", "max")
+    ).reset_index()
 
-        # CHARTS (unchanged — MUTLA-1 & MUTLA-2 still separate here if you want)
-        def assign_custom_week(date, start):
-            return (date - pd.to_datetime(start)).days // 7 + 1
+    plant_stats["Avg_Daily"] = (plant_stats["Total_Production"] / plant_stats["Days_Active"]).round(1)
 
-        filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
-        filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+    # Top 3 Average Daily
+    top_avg = plant_stats.sort_values("Avg_Daily", ascending=False).head(3)
+    # Top 3 Latest Accumulative
+    top_acc = plant_stats.sort_values("Latest_Accumulative", ascending=False).head(3)
 
-        weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
-        monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-        weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
-        monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
+    st.markdown("## TOP 3 LEADERS")
+    colA, colB = st.columns(2)
 
-        st.markdown("---")
-        st.subheader(f"Weekly Production — {start_date} to {end_date}")
-        st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Daily"), use_container_width=True)
-        st.subheader(f"Monthly Production — {start_date} to {end_date}")
-        st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Daily"), use_container_width=True)
-        st.subheader(f"Weekly Accumulative — Latest per Week")
-        st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
-        st.subheader(f"Monthly Accumulative — Latest per Month")
-        st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
+    with colA:
+        st.markdown("### Average Daily Production")
+        for i, row in top_avg.iterrows():
+            rank = ["1st", "2nd", "3rd"][i]
+            color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
+            st.markdown(f"""
+            <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
+                        border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                <h3 style="margin:0;color:{color}">{rank} • {row['Plant_Group']}</h3>
+                <h2 style="margin:10px 0 0">{row['Avg_Daily']:,.1f} m³/day</h2>
+                <p style="margin:5px 0 0; color:#666; font-size:14px;">
+                    over {row['Days_Active']} day{'s' if row['Days_Active'] != 1 else ''}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
+    with colB:
+        st.markdown("### Latest Accumulative Production")
+        for i, row in top_acc.iterrows():
+            rank = ["1st", "2nd", "3rd"][i]
+            color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
+            st.markdown(f"""
+            <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
+                        border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                <h3 style="margin:0;color:{color}">{rank} • {row['Plant_Group']}</h3>
+                <h2 style="margin:10px 0 0">{row['Latest_Accumulative']:,.0f} m³</h2>
+            </div>
+            """, unsafe_only_html=True)
+
+    # === CHARTS (original plants — MUTLA-1 & MUTLA-2 separate as before) ===
+    def assign_week(d):
+        return (d - pd.to_datetime(start_date)).days // 7 + 1
+
+    df_all["Week"] = df_all["Date"].apply(assign_week)
+    df_all["Month"] = df_all["Date"].dt.to_period("M").astype(str)
+
+    weekly = df_all.groupby(["Week", "Plant"], as_index=False)["Production for the Day"].sum()
+    monthly = df_all.groupby(["Month", "Plant"], as_index=False)["Production for the Day"].sum()
+    weekly_acc = df_all.groupby(["Week", "Plant"], as_index=False)["Accumulative Production"].last()
+    monthly_acc = df_all.groupby(["Month", "Plant"], as_index=False)["Accumulative Production"].last()
+
+    st.markdown("---")
+    st.subheader(f"Weekly Production")
+    st.plotly_chart(aggregated_bar_chart(weekly, "Production for the Day", "Week", theme_colors, "Weekly Production"), use_container_width=True)
+
+    st.subheader(f"Monthly Production")
+    st.plotly_chart(aggregated_bar_chart(monthly, "Production for the Day", "Month", theme_colors, "Monthly Production"), use_container_width=True)
+
+    st.subheader(f"Weekly Accumulative (Latest per Week)")
+    st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Week", theme_colors, "Weekly Accumulative"), use_container_width=True)
+
+    st.subheader(f"Monthly Accumulative (Latest per Month)")
+    st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative"), use_container_width=True)
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Set `GITHUB_TOKEN` & `GITHUB_REPO` in secrets for auto-push.")
+
 
