@@ -32,10 +32,10 @@ st.markdown("""
     .css-1v0mbdj {display: none !important;}
     .st-emotion-cache-1a6n9b8 {display: none !important;}
     
-    /* REMOVE COLLAPSE ARROW FOREVER */
+    /* REMOVE COLLAPSE BUTTON FOREVER */
     div[data-testid="collapsedControl"] {display: none !important;}
     
-    /* Optional: nice fixed sidebar width */
+    /* Nice fixed sidebar */
     section[data-testid="stSidebar"] {min-width: 340px !important; max-width: 340px !important;}
 </style>
 """, unsafe_allow_html=True)
@@ -191,7 +191,7 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         return False, str(e)
 
 # ========================================
-# PLOT HELPERS
+# PLOT HELPERS (unchanged)
 # ========================================
 def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
     df = df.copy()
@@ -377,7 +377,7 @@ st.sidebar.caption("Upload Excel with exact columns: Plant, Production for the D
 st.title("PRODUCTION FOR THE DAY")
 
 # ========================================
-# UPLOAD MODE
+# UPLOAD MODE (unchanged)
 # ========================================
 if mode == "Upload New Data":
     st.header("Upload new daily production file")
@@ -447,7 +447,7 @@ if mode == "Upload New Data":
                 )
 
 # ========================================
-# VIEW HISTORICAL DATA
+# VIEW HISTORICAL DATA (unchanged)
 # ========================================
 elif mode == "View Historical Data":
     st.header("Historical Data Viewer")
@@ -505,7 +505,7 @@ elif mode == "View Historical Data":
         )
 
 # ========================================
-# MANAGE DATA
+# MANAGE DATA (unchanged)
 # ========================================
 elif mode == "Manage Data":
     st.header("Manage Saved Files")
@@ -541,7 +541,7 @@ elif mode == "Manage Data":
                         st.error(f"Error: {e}")
 
 # ========================================
-# ANALYTICS — WITH MUTLA COMBINED IN TOP 3
+# ANALYTICS — MUTLA-1 + MUTLA-2 FULLY COMBINED & SUMMED CORRECTLY
 # ========================================
 elif mode == "Analytics":
     st.header("Analytics & Trends")
@@ -554,35 +554,19 @@ elif mode == "Analytics":
             start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
         with col2:
             end_date = st.date_input("End Date", value=datetime.today())
+
         frames = [load_saved(d) for d in saved]
         all_df = pd.concat(frames, ignore_index=True)
         all_df['Date'] = pd.to_datetime(all_df['Date'])
         filtered_df = all_df[(all_df['Date'] >= pd.to_datetime(start_date)) & (all_df['Date'] <= pd.to_datetime(end_date))]
+
         if filtered_df.empty:
             st.warning("No data in selected range.")
         else:
             filtered_df = safe_numeric(filtered_df)
-            filtered_df = filtered_df.sort_values(['Plant', 'Date'])
-
-            # COMBINE MUTLA-1 + MUTLA-2 INTO ONE "MUTLA" FOR TOP 3 BOXES
-            def combine_mutla_for_top3(df):
-                df = df.copy()
-                mutla_mask = df['Plant'].str.contains('MUTLA', case=False, na=False)
-                mutla_data = df[mutla_mask].copy()
-                non_mutla = df[~mutla_mask].copy()
-
-                if not mutla_data.empty:
-                    mutla_combined = pd.DataFrame({
-                        'Plant': ['MUTLA'],
-                        'Production for the Day': [mutla_data['Production for the Day'].sum()],
-                        'Accumulative Production': [mutla_data.sort_values('Date')['Accumulative Production'].iloc[-1]]
-                    })
-                    df = pd.concat([non_mutla, mutla_combined], ignore_index=True)
-                return df
-
-            display_df = combine_mutla_for_top3(filtered_df)
 
             total_daily_all = filtered_df["Production for the Day"].sum()
+
             st.markdown(f"""
             <div style="
                 background: linear-gradient(135deg, #1e40af, #3b82f6);
@@ -597,18 +581,27 @@ elif mode == "Analytics":
                 <h1 style="margin:0; font-size:85px; letter-spacing:4px;">TOTAL PRODUCTION</h1>
                 <h2 style="margin:35px 0; font-size:100px;">{total_daily_all:,.0f} m³</h2>
                 <p style="margin:0; font-size:32px;">
-                    {start_date.strftime('%b %d')} → {end_date.strftime('%b %d, %Y')} • All Plants
+                    {start_date.strftime('%b %d')} to {end_date.strftime('%b %d, %Y')} • All Plants
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
-            # TOP 3 AVERAGE DAILY (MUTLA COMBINED)
-            avg_daily = display_df.groupby('Plant')['Production for the Day'].mean().round(1)
-            top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
+            # COMBINE MUTLA-1 & MUTLA-2 INTO ONE "MUTLA" WITH CORRECT SUMS
+            df_for_top3 = filtered_df.copy()
+            df_for_top3['Plant_Group'] = df_for_top3['Plant'].str.upper().apply(lambda x: "MUTLA" if 'MUTLA' in x else x)
 
-            # TOP 3 LATEST ACCUMULATIVE (MUTLA COMBINED)
-            latest_acc = display_df.groupby('Plant')['Accumulative Production'].last()
-            top_acc = latest_acc.sort_values(ascending=False).head(3).reset_index()
+            grouped = df_for_top3.groupby('Plant_Group').agg({
+                'Production for the Day': 'sum',
+                'Accumulative Production': 'last',
+                'Date': 'count'
+            }).reset_index()
+            grouped = grouped.rename(columns={'Plant_Group': 'Plant'})
+
+            total_days = (end_date - start_date).days + 1
+            grouped['Avg_Daily'] = (grouped['Production for the Day'] / total_days).round(1)
+
+            top_avg = grouped.sort_values('Avg_Daily', ascending=False).head(3)[['Plant', 'Avg_Daily']]
+            top_acc = grouped.sort_values('Accumulative Production', ascending=False).head(3)[['Plant', 'Accumulative Production']]
 
             st.markdown("## TOP 3 LEADERS")
             colA, colB = st.columns(2)
@@ -621,7 +614,7 @@ elif mode == "Analytics":
                     <div style="background:white;padding:30px;border-radius:20px;margin:15px 0;
                                 border-left:12px solid {color};box-shadow:0 10px 25px rgba(0,0,0,0.15);">
                         <h3 style="margin:0;color:{color}">{rank} • {row['Plant']}</h3>
-                        <h2 style="margin:10px 0 0">{row['Production for the Day']:,.1f} m³/day</h2>
+                        <h2 style="margin:10px 0 0">{row['Avg_Daily']:,.1f} m³/day</h2>
                     </div>
                     """, unsafe_allow_html=True)
             with colB:
@@ -637,11 +630,13 @@ elif mode == "Analytics":
                     </div>
                     """, unsafe_allow_html=True)
 
-            # CHARTS (keep original behavior — MUTLA-1 & MUTLA-2 separate if you want)
+            # CHARTS (original behavior)
             def assign_custom_week(date, start):
                 return (date - pd.to_datetime(start)).days // 7 + 1
+
             filtered_df['Custom_Week'] = filtered_df['Date'].apply(lambda x: assign_custom_week(x, start_date))
             filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+
             weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
             monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
             weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
