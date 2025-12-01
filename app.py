@@ -667,7 +667,8 @@ elif mode == "Analytics":
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
-st.sidebar.write("All values now exact • Mutla fixed • No rounding")
+st.sidebar.write("Contact IT Head for any issues")
+
 
 
 
