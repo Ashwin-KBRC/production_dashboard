@@ -50,6 +50,7 @@ GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-
 GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
 
 _default_users = {"admin": hashlib.sha256("kbrc123".encode()).hexdigest()}
+_default_users = {"prd": hashlib.sha256("prd456".encode()).hexdigest()}
 USERS: Dict[str, str] = _default_users.copy()
 if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
     for k, v in SECRETS["USERS"].items():
@@ -668,6 +669,7 @@ elif mode == "Analytics":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.write("Contact IT Head for any issues")
+
 
 
 
