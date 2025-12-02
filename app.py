@@ -667,7 +667,8 @@ elif mode == "Analytics":
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
-st.sidebar.write("Contact IT Head for any issues")
+st.sidebar.write("Contact Mr. Ashwin Joseph Mathew, Head of IT, regarding any technical issues or assistance")
+
 
 
 
