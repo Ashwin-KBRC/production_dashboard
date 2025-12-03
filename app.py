@@ -808,6 +808,7 @@ st.sidebar.markdown("""
 <div style="font-size:0.85rem; color:#64748b;">
     <strong>Eng. Ashwin Joseph Mathew</strong><br>
     Head of IT<br>
-    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="text-decoration:none; color:#3b82f6;">Ashwin.IT@kbrc.com.kw</a>
+    <a href="For any assistance or Technical issues mailto:Ashwin.IT@kbrc.com.kw" style="text-decoration:none; color:#3b82f6;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
+
