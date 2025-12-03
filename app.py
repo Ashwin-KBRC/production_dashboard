@@ -374,22 +374,25 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
     unique_groups = agg_df[group_col].unique()
     palette_map = {}
     
-    # Generate palettes
-    weekly_palettes = [
-        ["#FF6B6B", "#FF8E8E", "#FFB3B3"], ["#4ECDC4", "#7FE0D8", "#A8E6E0"],
-        ["#45B7D1", "#6DC8E0", "#96D9F0"], ["#96CEB4", "#B8E0D2", "#D9F2E9"],
-        ["#D4A5A5", "#E8C1C1", "#F5D8D8"], ["#9B59B6", "#BB8FCE", "#D7BDE2"],
-        ["#3498DB", "#5DADE2", "#85C1E2"], ["#F1C40F", "#F4D03F", "#F7DC6F"],
-    ]
+    # Generate palettes - Using the base_colors passed from the selected theme to keep it consistent
+    # We will create variations of the theme colors for the groups
+    
+    # If base_colors is small, extend it
+    extended_colors = base_colors * 5
     
     for i, group in enumerate(unique_groups):
-        palette_map[str(group)] = weekly_palettes[i % len(weekly_palettes)]
+        # Assign a slice of colors to each group to ensure variety but within theme
+        start_idx = (i * 2) % len(extended_colors)
+        palette = extended_colors[start_idx:start_idx+3]
+        if not palette: palette = base_colors # Fallback
+        palette_map[str(group)] = palette
     
     color_discrete_map = {str(g): palette_map[str(g)][0] for g in unique_groups}
 
     fig = px.bar(
         agg_df, x="Plant", y=value_col, color=group_col,
-        color_discrete_map=color_discrete_map, title=title
+        color_discrete_map=color_discrete_map, title=title,
+        barmode='group'
     )
     
     fig.update_traces(
@@ -400,23 +403,8 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
         hovertemplate="<b>%{x}</b><br>%{y:,.3f} m³"
     )
 
-    # Color customization logic
-    current_idx = 0
-    for trace in fig.data:
-        group_key = str(trace.name)
-        if group_key in palette_map:
-            palette = palette_map[group_key]
-            colors = []
-            trace_len = len(trace.x)
-            for j in range(trace_len):
-                idx = current_idx + j
-                if idx < len(agg_df):
-                    if agg_df.iloc[idx]['Plant'] == 'KABD':
-                        colors.append("#EA580C") # Highlight KABD orange
-                    else:
-                        colors.append(palette[j % len(palette)])
-            trace.marker.color = colors
-            current_idx += trace_len
+    # Manual color override for KABD specific request if needed, but keeping theme consistent is requested
+    # We will prioritize the theme colors as requested "let whatever theme i set be applied"
 
     return update_fig_layout(fig)
 
@@ -424,11 +412,16 @@ def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_
 # 6. THEMES
 # ========================================
 COLOR_THEMES = {
-    "Modern Slate": ["#475569", "#64748b", "#94a3b8", "#cbd5e1"],
-    "Ocean Breeze": ["#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd"],
-    "Sunset Glow": ["#ea580c", "#f97316", "#fb923c", "#fdba74"],
-    "Nature": ["#16a34a", "#22c55e", "#4ade80", "#86efac"],
-    "Corporate Blue": ["#1e40af", "#3b82f6", "#60a5fa", "#93c5fd"],
+    "Modern Slate": ["#475569", "#64748b", "#94a3b8", "#cbd5e1", "#f1f5f9"],
+    "Ocean Breeze": ["#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd", "#e0f2fe"],
+    "Sunset Glow": ["#ea580c", "#f97316", "#fb923c", "#fdba74", "#ffedd5"],
+    "Nature": ["#16a34a", "#22c55e", "#4ade80", "#86efac", "#dcfce7"],
+    "Corporate Blue": ["#1e40af", "#3b82f6", "#60a5fa", "#93c5fd", "#dbeafe"],
+    "Neon Cyber": ["#f72585", "#7209b7", "#3a0ca3", "#4361ee", "#4cc9f0"],
+    "Forest Rain": ["#2d6a4f", "#40916c", "#52b788", "#74c69d", "#95d5b2"],
+    "Cherry Blossom": ["#590d22", "#800f2f", "#a4133c", "#c9184a", "#ff4d6d"],
+    "Royal Purple": ["#240046", "#3c096c", "#5a189a", "#7b2cbf", "#9d4edd"],
+    "Earth & Sky": ["#8d6e63", "#a1887f", "#bcaaa4", "#81d4fa", "#4fc3f7"],
 }
 
 if "theme" not in st.session_state: st.session_state["theme"] = "Corporate Blue"
@@ -540,7 +533,7 @@ if mode == "Upload New Data":
                 
                 try:
                     saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
-                    log_event(current_user, f"Uploaded data {selected_date}")
+                    log_event(current_user, f"Uploaded file for {selected_date}") # Log upload
                     attempt_git_push(saved_path, f"Add {selected_date}")
                     
                     st.success("Data successfully saved and synced!")
@@ -583,7 +576,14 @@ if mode == "Upload New Data":
                     with c2: st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Daily Production"), use_container_width=True)
                     
                     st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Trend Line"), use_container_width=True)
-                    
+                    st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Flow Area"), use_container_width=True)
+
+                    st.markdown("#### Accumulative Charts")
+                    acc_df = df_display[["Plant", "Accumulative Production"]].copy()
+                    st.plotly_chart(bar_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Total"), use_container_width=True)
+                    st.plotly_chart(line_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Trend"), use_container_width=True)
+                    st.plotly_chart(area_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Flow"), use_container_width=True)
+
                     # DOWNLOAD
                     excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
                     st.download_button("📥 Download Official Report", excel_file, f"Production_{selected_date}.xlsx", type="secondary")
@@ -631,12 +631,14 @@ elif mode == "View Historical Data":
             c1, c2 = st.columns(2)
             with c1: st.plotly_chart(pie_chart(df_hist, "Production for the Day", theme_colors, "Share"), use_container_width=True)
             with c2: st.plotly_chart(bar_chart(df_hist, "Production for the Day", theme_colors, "Production Levels"), use_container_width=True)
+            st.plotly_chart(line_chart(df_hist, "Production for the Day", theme_colors, "Daily Trend"), use_container_width=True)
             st.plotly_chart(area_chart(df_hist, "Production for the Day", theme_colors, "Flow Volume"), use_container_width=True)
             
         with tab2:
             acc_hist = df_hist.sort_values("Accumulative Production", ascending=False)
             st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, "Total Accumulative"), use_container_width=True)
             st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, "Accumulative Trend"), use_container_width=True)
+            st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, "Accumulative Flow"), use_container_width=True)
 
         excel_file = generate_excel_report(df_hist, selected)
         st.download_button("📥 Download Report", excel_file, f"Archive_{selected}.xlsx")
@@ -740,34 +742,53 @@ elif mode == "Analytics":
     st.markdown("---")
     filtered['Week'] = filtered['Date'].dt.to_period('W').apply(lambda r: r.start_time)
     filtered['Month'] = filtered['Date'].dt.to_period('M').astype(str)
+    filtered['Custom_Week'] = ((filtered['Date'] - filtered['Date'].min()).dt.days // 7) + 1
     
+    # Production Data
     wk_prod = filtered.groupby(['Week', 'Plant'], as_index=False)['Production for the Day'].sum()
     mo_prod = filtered.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
     
-    st.subheader("Weekly Sums")
-    st.plotly_chart(aggregated_bar_chart(wk_prod, "Production for the Day", "Week", theme_colors, ""), use_container_width=True)
+    # Accumulative Data (Latest in period)
+    wk_acc = filtered.groupby(['Week', 'Plant'], as_index=False)['Accumulative Production'].last()
+    mo_acc = filtered.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
     
-    st.subheader("Monthly Sums")
-    st.plotly_chart(aggregated_bar_chart(mo_prod, "Production for the Day", "Month", theme_colors, ""), use_container_width=True)
+    tab_prod, tab_acc = st.tabs(["📊 Weekly/Monthly Production", "📈 Weekly/Monthly Accumulative"])
+    
+    with tab_prod:
+        st.subheader("Weekly Sums")
+        st.plotly_chart(aggregated_bar_chart(wk_prod, "Production for the Day", "Week", theme_colors, ""), use_container_width=True)
+        
+        st.subheader("Monthly Sums")
+        st.plotly_chart(aggregated_bar_chart(mo_prod, "Production for the Day", "Month", theme_colors, ""), use_container_width=True)
+
+    with tab_acc:
+        st.subheader("Weekly Accumulative Snapshot")
+        st.plotly_chart(aggregated_bar_chart(wk_acc, "Accumulative Production", "Week", theme_colors, ""), use_container_width=True)
+        
+        st.subheader("Monthly Accumulative Snapshot")
+        st.plotly_chart(aggregated_bar_chart(mo_acc, "Accumulative Production", "Month", theme_colors, ""), use_container_width=True)
 
 # --- MANAGE MODE ---
 elif mode == "Manage Data":
     st.title("Data Management")
     saved_list = list_saved_dates()
     
-    if not saved_list: st.info("No files.")
+    if not saved_list: st.info("No files found.")
     else:
+        st.markdown("Manage your uploaded datasets here. You can download backups or remove incorrect entries.")
         for date_str in saved_list:
-            c1, c2, c3 = st.columns([3, 1, 1])
-            c1.markdown(f"**📄 {date_str}**")
-            if c2.button("Delete", key=f"del_{date_str}"):
-                if delete_saved(date_str):
-                    log_event(current_user, f"Deleted {date_str}")
-                    st.rerun()
-            if c3.button("Download", key=f"dl_{date_str}"):
-                df = load_saved(date_str)
-                excel = generate_excel_report(df, date_str)
-                st.download_button("💾", excel, f"{date_str}.xlsx")
+            with st.expander(f"📄 {date_str}"):
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    if st.button("Download File", key=f"dl_{date_str}"):
+                        df = load_saved(date_str)
+                        excel = generate_excel_report(df, date_str)
+                        st.download_button("Click to Save", excel, f"{date_str}.xlsx")
+                with c2:
+                    if st.button("Delete File", key=f"del_{date_str}", type="primary"):
+                        if delete_saved(date_str):
+                            log_event(current_user, f"Deleted {date_str}")
+                            st.rerun()
 
 # --- LOGS MODE ---
 elif mode == "Logs":
@@ -784,8 +805,9 @@ elif mode == "Logs":
 # ========================================
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-<div style="text-align: center; color: #94a3b8; font-size: 0.8rem;">
-    Powered by KBRC IT<br>
-    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color: #3b82f6; text-decoration: none;">Contact Support</a>
+<div style="font-size:0.85rem; color:#64748b;">
+    <strong>Eng. Ashwin Joseph Mathew</strong><br>
+    Head of IT<br>
+    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="text-decoration:none; color:#3b82f6;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
