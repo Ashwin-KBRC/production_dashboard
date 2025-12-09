@@ -4,93 +4,166 @@ import base64
 import requests
 import csv
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Any, Tuple, List
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import io
 import xlsxwriter
 
 # ========================================
-# PAGE CONFIG & PROFESSIONAL STYLING
+# 1. PAGE CONFIGURATION
 # ========================================
-st.set_page_config(page_title="Production Dashboard", layout="wide", page_icon="Trophy")
+st.set_page_config(
+    page_title="KBRC Executive Dashboard", 
+    layout="wide", 
+    page_icon="🏭",
+    initial_sidebar_state="expanded"
+)
 
-# PROFESSIONAL UI CSS
-st.markdown("""
-<style>
-    /* 1. HIDE STREAMLIT BRANDING */
-    footer {visibility: hidden !important;}
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden !important;}
-    .stAppDeployButton {display: none !important;}
-    
-    /* 2. FIX SIDEBAR (Make it non-collapsible) */
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-    
-    /* 3. PROFESSIONAL FONTS & UI ELEVATION */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Headings */
-    h1, h2, h3 {
-        font-weight: 800;
-        letter-spacing: -0.5px;
-    }
-    
-    /* Cards/Containers */
-    .stDataFrame {
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-    }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-        border-right: 1px solid #e0e0e0;
-    }
-    
-    /* Buttons */
-    .stButton>button {
-        border-radius: 6px;
-        font-weight: 600;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ========================================
+# 2. SESSION STATE & DARK MODE SETUP
+# ========================================
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
 
+# ========================================
+# 3. CSS STYLING (DYNAMIC LIGHT/DARK)
+# ========================================
+def inject_css():
+    """
+    Injects professional CSS based on the current Light/Dark mode state.
+    Handles all UI elements including Cards, Tables, Tabs, and Text.
+    """
+    if st.session_state["dark_mode"]:
+        # DARK MODE PALETTE
+        bg_color = "#0f172a"          # Slate 900
+        text_color = "#f8fafc"        # Slate 50
+        card_bg = "#1e293b"           # Slate 800
+        border_color = "#334155"      # Slate 700
+        sidebar_bg = "#111827"        # Gray 900
+        secondary_text = "#94a3b8"    # Slate 400
+    else:
+        # LIGHT MODE PALETTE
+        bg_color = "#f8fafc"          # Slate 50
+        text_color = "#1e293b"        # Slate 800
+        card_bg = "#ffffff"           # White
+        border_color = "#e2e8f0"      # Slate 200
+        sidebar_bg = "#ffffff"        # White
+        secondary_text = "#64748b"    # Slate 500
+
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        html, body, [class*="css"], .stApp {{
+            font-family: 'Inter', sans-serif;
+            color: {text_color};
+            background-color: {bg_color};
+        }}
+
+        /* HIDE DEFAULT STREAMLIT BRANDING */
+        footer {{visibility: hidden !important;}}
+        #MainMenu {{visibility: hidden;}}
+        header {{visibility: hidden !important;}}
+        .stAppDeployButton {{display: none !important;}}
+        
+        /* SIDEBAR STYLING */
+        [data-testid="stSidebar"] {{
+            background-color: {sidebar_bg};
+            border-right: 1px solid {border_color};
+        }}
+        [data-testid="stSidebarCollapseButton"] {{display: none !important;}}
+
+        /* PROFESSIONAL METRIC CARDS */
+        .metric-card {{
+            background: {card_bg};
+            border: 1px solid {border_color};
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: {text_color};
+        }}
+        .metric-card:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: #3b82f6;
+        }}
+        
+        /* HERO BANNER GRADIENT */
+        .hero-banner {{
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }}
+        
+        /* CUSTOM TAB STYLING */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 10px;
+            background-color: transparent;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            border-radius: 6px;
+            color: {secondary_text};
+            font-weight: 600;
+            padding: 10px 20px;
+        }}
+        .stTabs [aria-selected="true"] {{
+            background-color: {card_bg};
+            border: 1px solid {border_color};
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }}
+
+        /* DATAFRAME & TABLE STYLING */
+        .stDataFrame {{ border: 1px solid {border_color}; border-radius: 8px; overflow: hidden; }}
+        
+        /* HEADERS */
+        h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; font-weight: 700; }}
+        
+        /* INSIGHT BOX */
+        .insight-box {{
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: {text_color};
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+inject_css()
+
+# ========================================
+# 4. SETUP & AUTHENTICATION
+# ========================================
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
-# ========================================
-# SECRETS & AUTH
-# ========================================
+# CONFIGURATION SECRETS
 SECRETS = {}
-try:
-    SECRETS = dict(st.secrets)
-except Exception:
-    try:
-        SECRETS = dict(os.environ)
-    except Exception:
-        SECRETS = {}
+try: SECRETS = dict(st.secrets)
+except: SECRETS = {}
 
 GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
 GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
 GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
 
-# ADDED MANAGER PROFILE HERE
 _default_users = {
     "admin": hashlib.sha256("kbrc123".encode()).hexdigest(),
-    "manager": hashlib.sha256("sjk@2025".encode()).hexdigest()
+    "manager": hashlib.sha256("sjk@2025".encode()).hexdigest(),
+    "production": hashlib.sha256("Production@123".encode()).hexdigest()
 }
 
 USERS: Dict[str, str] = _default_users.copy()
@@ -99,119 +172,54 @@ if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
         USERS[k] = v
 
 # ========================================
-# LOGGING SYSTEM
+# 5. LOGIC & UTILITY FUNCTIONS
 # ========================================
+def get_kuwait_time():
+    """Returns current time in Kuwait (UTC+3)"""
+    return datetime.now(timezone.utc) + timedelta(hours=3)
+
+def get_greeting():
+    h = get_kuwait_time().hour
+    if h < 12: return "Good Morning"
+    elif 12 <= h < 18: return "Good Afternoon"
+    else: return "Good Evening"
+
+def format_m3(value):
+    """Standardized formatting for Cubic Meters"""
+    return f"{value:,.3f} m³"
+
 def init_logs():
     if not LOG_FILE.exists():
         with open(LOG_FILE, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Timestamp", "User", "Event"])
+            csv.writer(f).writerow(["Timestamp", "User", "Event"])
 
 def log_event(username: str, event: str):
     init_logs()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
+        # Use Kuwait Time for logging to fix "time off by miles"
+        ts = get_kuwait_time().strftime("%Y-%m-%d %H:%M:%S")
         with open(LOG_FILE, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([timestamp, username, event])
-        # Try pushing logs to git if configured (optional, prevents data loss on reboot)
-        # attempt_git_push(LOG_FILE, "Update access logs") 
-    except Exception as e:
-        print(f"Logging error: {e}")
+            csv.writer(f).writerow([ts, username, event])
+    except: pass
 
 def get_logs() -> pd.DataFrame:
     init_logs()
-    try:
-        return pd.read_csv(LOG_FILE)
-    except:
-        return pd.DataFrame(columns=["Timestamp", "User", "Event"])
-
-# ========================================
-# THEMES
-# ========================================
-COLOR_THEMES = {
-    "Modern Slate": ["#4A6572", "#7D9D9C", "#A4C3B2", "#C9D7D6", "#E5ECE9"],
-    "Sunset Glow": ["#F28C38", "#E96E5D", "#D66BA0", "#A56EC3", "#6B5B95"],
-    "Ocean Breeze": ["#2E8B8B", "#48A9A6", "#73C2A5", "#9DE0A4", "#C5E8A3"],
-    "Corporate": ["#FF4040", "#4040FF", "#40FF40", "#FF8000", "#FFFF40"],
-    "Midnight Sky": ["#283593", "#3F51B5", "#673AB7", "#9C27B0", "#BA68C8"],
-    "Spring Bloom": ["#D4A59A", "#C2D4B7", "#A9C5A7", "#8DB596", "#71A684"],
-    "Executive Suite": ["#4A4A4A", "#1E3A8A", "#D4A017", "#8A8A8A", "#A3BFFA"],
-    "Boardroom Blue": ["#2A4066", "#4682B4", "#B0C4DE", "#C0C0C0", "#87CEEB"],
-    "Corporate Ivory": ["#F5F5F5", "#008080", "#800000", "#D3D3D3", "#CD853F"],
-    "Lava Flow": ["#FF4500", "#FF6B35", "#FF8E53", "#FFB347", "#FFD700"],
-    "Desert Storm": ["#8B4513", "#D2691E", "#CD853F", "#DEB887", "#F4A460"],
-    "Arctic Ice": ["#00CED1", "#48D1CC", "#40E0D0", "#AFEEEE", "#E0FFFF"],
-}
-
-WEEKLY_PALETTES = [
-    ["#FF6B6B", "#FF8E8E", "#FFB3B3", "#FFD1D1"],
-    ["#4ECDC4", "#7FE0D8", "#A8E6E0", "#D1F2EF"],
-    ["#45B7D1", "#6DC8E0", "#96D9F0", "#BFE9FF"],
-    ["#96CEB4", "#B8E0D2", "#D9F2E9", "#F0F8F7"],
-    ["#D4A5A5", "#E8C1C1", "#F5D8D8", "#FAE8E8"],
-    ["#9B59B6", "#BB8FCE", "#D7BDE2", "#E8DAEF"],
-    ["#3498DB", "#5DADE2", "#85C1E2", "#AED6F1"],
-    ["#F1C40F", "#F4D03F", "#F7DC6F", "#F9E79F"],
-]
-
-if "theme" not in st.session_state:
-    st.session_state["theme"] = "Lava Flow"
-elif st.session_state["theme"] not in COLOR_THEMES:
-    st.session_state["theme"] = "Lava Flow"
-
-# ========================================
-# AUTH FUNCTIONS
-# ========================================
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    try: return pd.read_csv(LOG_FILE)
+    except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
 def check_credentials(username: str, password: str) -> bool:
-    if not username:
-        return False
+    if not username: return False
     user = username.strip()
     if user in USERS:
-        is_valid = hash_password(password) == USERS[user]
-        if is_valid:
-            log_event(user, "Login Success")
-        else:
-            log_event(user, "Login Failed (Bad Password)")
-        return is_valid
+        v = hashlib.sha256(password.encode()).hexdigest() == USERS[user]
+        log_event(user, "Login Success" if v else "Login Failed")
+        return v
     return False
 
-def login_ui():
-    st.sidebar.subheader("Login")
-    with st.sidebar.form("login_form"):
-        username = st.text_input("Username", key="login_user")
-        password = st.text_input("Password", type="password", key="login_pwd")
-        submitted = st.form_submit_button("Sign in")
-        if submitted:
-            if check_credentials(username, password):
-                st.session_state["logged_in"] = True
-                st.session_state["username"] = username.strip()
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid username or password")
-
-def logout():
-    if "logged_in" in st.session_state:
-        log_event(st.session_state.get("username", "Unknown"), "Logout")
-        del st.session_state["logged_in"]
-    if "username" in st.session_state:
-        del st.session_state["username"]
-    st.rerun()
-
-def logged_in() -> bool:
-    return st.session_state.get("logged_in", False)
-
-# ========================================
-# FILE I/O & GIT HELPERS
-# ========================================
-def save_csv(df: pd.DataFrame, date_obj: datetime.date, overwrite: bool = False) -> Path:
+def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
     p = DATA_DIR / fname
-    if p.exists() and not overwrite:
-        raise FileExistsError(f"{fname} already exists.")
+    if p.exists() and not overwrite: raise FileExistsError(f"{fname} exists.")
     df.to_csv(p, index=False, float_format="%.3f")
     return p
 
@@ -220,8 +228,7 @@ def list_saved_dates() -> List[str]:
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
-    if not p.exists():
-        raise FileNotFoundError(f"File not found: {date_str}")
+    if not p.exists(): raise FileNotFoundError("File missing")
     return pd.read_csv(p)
 
 def delete_saved(date_str: str) -> bool:
@@ -232,614 +239,496 @@ def delete_saved(date_str: str) -> bool:
     return False
 
 def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        return False, "GitHub not configured."
+    if not GITHUB_TOKEN or not GITHUB_REPO: return False, "Git not configured"
     try:
         repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
         url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
         if file_path.exists():
-             with open(file_path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-        else:
-             return False, "File does not exist"
-             
+             with open(file_path, "rb") as f: content = base64.b64encode(f.read()).decode()
+        else: return False, "File missing"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         resp = requests.get(url, headers=headers)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
-        payload = {
-            "message": msg,
-            "content": b64,
-            "branch": "main",
-            "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}
-        }
-        if sha:
-            payload["sha"] = sha
+        payload = {"message": msg, "content": content, "branch": "main", "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}}
+        if sha: payload["sha"] = sha
         r = requests.put(url, headers=headers, json=payload)
-        return r.status_code in [200, 201], ("Success" if r.ok else r.json().get("message", "Failed"))
-    except Exception as e:
-        return False, str(e)
+        return r.ok, "Synced" if r.ok else "Sync Failed"
+    except Exception as e: return False, str(e)
 
-# ========================================
-# PLOT HELPERS
-# ========================================
-def pie_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    df = df.copy()
-    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
-    fig = px.pie(df, names="Plant", values=value_col, color_discrete_sequence=colors, title=title)
-    fig.update_traces(textinfo="percent+label", textfont=dict(size=14, color="black"))
-    fig.update_layout(title_font=dict(family="Arial", size=18), legend_font=dict(size=16), margin=dict(t=60, b=40, l=40, r=40))
-    return fig
-
-def bar_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    df = df.copy()
-    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
-    df = df.sort_values(value_col, ascending=False)
-    fig = px.bar(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title,
-                 text=df[value_col].round(1))
-    fig.update_traces(
-        texttemplate="%{text:,.1f}",
-        textposition="outside",
-        textfont=dict(size=16, color="black", family="Arial"),
-        cliponaxis=False,
-        textangle=0
-    )
-    fig.update_layout(
-        title_font=dict(size=18),
-        margin=dict(t=60, b=280, l=60, r=40),
-        xaxis_tickangle=0,
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0",
-        xaxis_tickfont=dict(size=13),
-        yaxis_tickfont=dict(size=12)
-    )
-    return fig
-
-def line_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    df = df.copy()
-    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
-    fig = px.line(df, x="Plant", y=value_col, markers=True, title=title, color_discrete_sequence=colors,
-                  text=df[value_col].round(1))
-    fig.update_traces(
-        marker=dict(size=10, line=dict(width=2, color="DarkSlateGrey")),
-        line=dict(width=3),
-        textposition="top center",
-        texttemplate="%{text:,.1f}",
-        textfont=dict(size=10, color="black")
-    )
-    fig.update_layout(
-        title_font=dict(size=18),
-        margin=dict(t=60, b=40, l=60, r=40),
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
-    return fig
-
-def area_chart(df: pd.DataFrame, value_col: str, colors: list, title: str):
-    df = df.copy()
-    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
-    fig = px.area(df, x="Plant", y=value_col, color="Plant", color_discrete_sequence=colors, title=title)
-    fig.update_traces(line=dict(width=2), opacity=0.8)
-    fig.update_layout(
-        title_font=dict(size=18),
-        margin=dict(t=60, b=40, l=60, r=40),
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0"
-    )
-    return fig
-
-def aggregated_bar_chart(df: pd.DataFrame, value_col: str, group_col: str, base_colors: list, title: str):
-    df = df.copy()
-    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
-    agg_df = df.groupby([group_col, "Plant"], as_index=False)[value_col].sum()
-    agg_df = agg_df.sort_values([group_col, value_col], ascending=[True, False])
-    unique_groups = agg_df[group_col].unique()
-    palette_map = {}
-    for i, group in enumerate(unique_groups):
-        palette = WEEKLY_PALETTES[i % len(WEEKLY_PALETTES)]
-        palette_map[str(group)] = palette
-    color_discrete_map = {str(g): palette_map[str(g)][0] for g in unique_groups}
-    fig = px.bar(
-        agg_df,
-        x="Plant",
-        y=value_col,
-        color=group_col,
-        color_discrete_map=color_discrete_map,
-        title=title,
-        text=agg_df[value_col].round(1)
-    )
-    fig.update_traces(
-        texttemplate="%{text:,.1f}",
-        textposition="outside",
-        textfont=dict(size=13, color="black"),
-        cliponaxis=False
-    )
-    fig.update_layout(
-        title_font=dict(size=18),
-        legend_font=dict(size=14),
-        margin=dict(t=70, b=280, l=60, r=40),
-        xaxis_tickangle=0,
-        xaxis_gridcolor="#E0E0E0",
-        yaxis_gridcolor="#E0E0E0",
-        xaxis_tickfont=dict(size=13),
-        yaxis_tickfont=dict(size=12),
-        bargap=0.2
-    )
-    current_idx = 0
-    for trace in fig.data:
-        group_key = str(trace.name)
-        if group_key not in palette_map:
-            continue
-        palette = palette_map[group_key]
-        trace_len = len(trace.x)
-        colors = []
-        text_colors = []
-        text_sizes = []
-        text_families = []
-        for j in range(trace_len):
-            idx = current_idx + j
-            # Safety check for index
-            if idx < len(agg_df):
-                if agg_df.iloc[idx]['Plant'] == 'KABD':
-                    colors.append("#FF4500")
-                    text_colors.append("#FF4500")
-                    text_sizes.append(16)
-                    text_families.append("Arial Black")
-                else:
-                    grad_idx = j % len(palette)
-                    colors.append(palette[grad_idx])
-                    text_colors.append("black")
-                    text_sizes.append(13)
-                    text_families.append("Arial")
-        trace.marker.color = colors
-        trace.textfont.color = text_colors
-        trace.textfont.size = text_sizes
-        trace.textfont.family = text_families
-        current_idx += trace_len
-    return fig
-
-# ========================================
-# DATA HELPERS
-# ========================================
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
     df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
+    # Smart Fill: fill missing accumulative data within the same plant group
+    # Ensure 'Date' is datetime object before running this, though it should be safe here
     df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
     return df2
 
 def generate_excel_report(df: pd.DataFrame, date_str: str):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Production Data', index=False, float_format="%.3f")
+        df.to_excel(writer, sheet_name='Data', index=False, float_format="%.3f")
+        workbook = writer.book
+        worksheet = writer.sheets['Data']
+        format_num = workbook.add_format({'num_format': '#,##0.000 "m³"'})
+        # Apply formatting to the numeric columns
+        worksheet.set_column('B:C', 18, format_num)
     output.seek(0)
     return output
 
-# ========================================
-# LOGIN CHECK
-# ========================================
-if not logged_in():
-    st.markdown("""
-    <div style='text-align: center; margin-top: 50px;'>
-        <h1>Welcome to KBRC Production Dashboard</h1>
-        <p>Please log in securely from the sidebar.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    login_ui()
-    st.sidebar.write("---")
-    st.sidebar.caption("If you don't have credentials, please contact the admin.")
-    st.stop()
-
-# ========================================
-# MAIN UI
-# ========================================
-current_user = st.session_state.get('username', 'User')
-
-st.sidebar.title("Controls")
-st.sidebar.info(f"👤 Logged in as: **{current_user}**")
-
-# Define available modes
-available_modes = ["Upload New Data", "View Historical Data", "Manage Data", "Analytics"]
-if current_user == "manager":
-    available_modes.append("Logs")
-
-mode = st.sidebar.radio("Mode", available_modes, index=1 if "View Historical Data" in available_modes else 0)
-
-# Theme Selection
-theme_choice = st.sidebar.selectbox("Theme", list(COLOR_THEMES.keys()), index=list(COLOR_THEMES.keys()).index(st.session_state["theme"]))
-if theme_choice != st.session_state["theme"]:
-    st.session_state["theme"] = theme_choice
-    st.rerun()
-theme_colors = COLOR_THEMES[theme_choice]
-
-alert_threshold = st.sidebar.number_input("Alert threshold (m³)", min_value=0.0, value=50.0, step=0.5)
-if st.sidebar.button("Logout", type="primary"):
-    logout()
-
-st.sidebar.markdown("---")
-
-# ========================================
-# UPLOAD MODE
-# ========================================
-if mode == "Upload New Data":
-    st.title("PRODUCTION FOR THE DAY")
-    st.header("Upload new daily production file")
-    uploaded = st.file_uploader("Upload Excel (.xlsx)", type=["xlsx"])
+def generate_smart_insights(df):
+    """
+    INNOVATION: Automatically generates text-based insights for the Executive Summary.
+    """
+    if df.empty: return "No data available to generate insights."
     
-    # Using session state to persist date if theme changes, default to today
-    if "upload_date" not in st.session_state:
-        st.session_state.upload_date = datetime.today()
-        
-    selected_date = st.date_input("Which date is this file for?", value=st.session_state.upload_date, key="upload_date_picker")
-    st.session_state.upload_date = selected_date
-
-    if uploaded:
-        try:
-            df_uploaded = pd.read_excel(uploaded)
-            df_uploaded.columns = df_uploaded.columns.str.strip()
-        except Exception as e:
-            st.error(f"Failed to read: {e}")
-            st.stop()
-        missing = [c for c in REQUIRED_COLS if c not in df_uploaded.columns]
-        if missing:
-            st.error(f"Missing columns: {missing}")
+    total = df['Production for the Day'].sum()
+    
+    # Check if 'Plant' exists before grouping
+    if 'Plant' in df.columns and not df['Plant'].empty:
+        # Sum of production for the current date range
+        plant_totals = df.groupby('Plant')['Production for the Day'].sum()
+        if not plant_totals.empty:
+            top_plant = plant_totals.idxmax()
+            top_val = plant_totals.max()
         else:
-            st.subheader("Preview")
-            st.dataframe(df_uploaded.head(20))
-            overwrite = st.checkbox("Overwrite existing?", value=False)
-            confirm = st.checkbox("Confirm data is correct")
-            if confirm and st.button("Upload & Save", type="primary"):
-                df_save = df_uploaded.copy()
-                df_save["Date"] = selected_date.strftime("%Y-%m-%d")
-                try:
-                    saved_path = save_csv(df_save, selected_date, overwrite=overwrite)
-                except FileExistsError as e:
-                    st.error(str(e))
-                    st.stop()
-                st.success(f"Saved to {saved_path}")
-                log_event(current_user, f"Uploaded data for {selected_date}")
-                
-                pushed, message = attempt_git_push(saved_path, f"Add data for {selected_date}")
-                if pushed:
-                    st.success(message)
-                else:
-                    st.warning(message)
-                
-                df_display = df_save[~df_save["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-                df_display = safe_numeric(df_display)
-                st.markdown("### Totals")
-                total_daily = df_display["Production for the Day"].sum()
-                total_acc = df_display["Accumulative Production"].sum()
-                
-                # Professional Metrics Display
-                m1, m2 = st.columns(2)
-                m1.metric("Daily Production", f"{total_daily:,.1f} m³")
-                m2.metric("Accumulative Total", f"{total_acc:,.1f} m³")
-
-                alerts = df_display[df_display["Production for the Day"] < alert_threshold]
-                if not alerts.empty:
-                    st.warning("⚠️ Low Production Alert (Below Threshold)")
-                    for _, r in alerts.iterrows():
-                        st.write(f"- {r['Plant']}: {r['Production for the Day']:.1f} m³")
-                
-                st.markdown("### Charts")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.plotly_chart(pie_chart(df_display, "Production for the Day", theme_colors, "Daily Share"), use_container_width=True)
-                with c2:
-                    st.plotly_chart(bar_chart(df_display, "Production for the Day", theme_colors, "Daily Production"), use_container_width=True)
-                st.plotly_chart(line_chart(df_display, "Production for the Day", theme_colors, "Daily Trend"), use_container_width=True)
-                st.plotly_chart(area_chart(df_display, "Production for the Day", theme_colors, "Daily Flow"), use_container_width=True)
-                
-                st.markdown("#### Accumulative Production — From Uploaded Excel")
-                acc_df = df_display[["Plant", "Accumulative Production"]].copy()
-                acc_df = acc_df.sort_values("Accumulative Production", ascending=False)
-                st.plotly_chart(bar_chart(acc_df, "Accumulative Production", theme_colors, "Accumulative Production"), use_container_width=True)
-                
-                top = df_display.loc[df_display["Production for the Day"].idxmax()]
-                st.success(f"🏆 Top Performer: {top['Plant']} — {top['Production for the Day']:.1f} m³")
-                
-                excel_file = generate_excel_report(df_display, selected_date.strftime("%Y-%m-%d"))
-                st.download_button(
-                    "Download Excel Report",
-                    excel_file,
-                    f"report_{selected_date.strftime('%Y-%m-%d')}.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
-
-# ========================================
-# VIEW HISTORICAL DATA
-# ========================================
-elif mode == "View Historical Data":
-    st.header("Historical Data Viewer")
-    saved_list = list_saved_dates()
-    if not saved_list:
-        st.info("No data available.")
+            top_plant, top_val = "N/A", 0
     else:
-        # Initialize default date in session state if not present
-        if "hist_date" not in st.session_state:
-            try:
-                st.session_state.hist_date = datetime.strptime(saved_list[0], "%Y-%m-%d").date()
-            except:
-                st.session_state.hist_date = datetime.today()
+        top_plant, top_val = "N/A", 0
+        
+    avg = df['Production for the Day'].mean()
+    
+    insight = f"**Executive Summary:** The total production for this period stands at **{format_m3(total)}**. "
+    if top_plant != "N/A":
+        insight += f"The leading facility is **{top_plant}**, contributing **{format_m3(top_val)}** to the total output. "
+    insight += f"On average, daily plant production is tracking at **{format_m3(avg)}**."
+    return insight
 
-        # Update session state when input changes
-        selected_date = st.date_input("Select date", value=st.session_state.hist_date, key="hist_date_picker")
-        st.session_state.hist_date = selected_date
-        
-        selected = selected_date.strftime("%Y-%m-%d")
-        if selected not in saved_list:
-            st.warning(f"No data available for {selected}.")
-            st.stop()
-            
-        df_hist = load_saved(selected)
-        df_hist_disp = df_hist[~df_hist["Plant"].astype(str).str.upper().str.contains("TOTAL")]
-        df_hist_disp = safe_numeric(df_hist_disp)
-        total_daily = df_hist_disp["Production for the Day"].sum()
-        
-        # Enhanced Header
+# ========================================
+# 6. CHARTING ENGINE
+# ========================================
+def get_theme_colors(theme_name):
+    # Professional Solid Colors as requested
+    themes = {
+        "Neon Cyber": ["#F72585", "#7209B7", "#3A0CA3", "#4361EE", "#4CC9F0"], # Bright/Neon
+        "Executive Blue": ["#1E40AF", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"], # Solid Blues
+        "Emerald City": ["#065F46", "#10B981", "#34D399", "#6EE7B7", "#A7F3D0"], # Solid Greens
+        "Royal Purple": ["#581C87", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD"], # Solid Purples
+        "Crimson Tide": ["#991B1B", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]  # Solid Reds
+    }
+    return themes.get(theme_name, themes["Neon Cyber"])
+
+def apply_chart_theme(fig):
+    """
+    Applies the professional layout to charts.
+    Ensures labels/legends are readable in both Dark and Light modes.
+    """
+    dark = st.session_state["dark_mode"]
+    # Dynamic text color based on mode
+    text_col = "#ffffff" if dark else "#1e293b"
+    # Subtle grid lines
+    grid_col = "rgba(255, 255, 255, 0.1)" if dark else "rgba(0, 0, 0, 0.05)"
+    
+    fig.update_layout(
+        font=dict(family="Inter", size=12, color=text_col),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=30, b=10, l=10, r=10),
+        xaxis=dict(showgrid=False, linecolor=grid_col, tickfont=dict(color=text_col)),
+        yaxis=dict(showgrid=True, gridcolor=grid_col, linecolor=grid_col, tickfont=dict(color=text_col)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color=text_col)),
+        hovermode="x unified"
+    )
+    return fig
+
+# ========================================
+# 7. MAIN APPLICATION LOGIC
+# ========================================
+
+# LOGIN SCREEN
+if not st.session_state.get("logged_in", False):
+    c1, c2, c3 = st.columns([1, 1.5, 1])
+    with c2:
+        st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
+        # Dynamic Card for Login
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 40px; border-radius: 15px; text-align: center; margin: 20px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-            <h1 style="margin:0; font-size:3rem;">TOTAL PRODUCTION</h1>
-            <h2 style="margin:10px 0; font-size:4rem; font-weight: 800;">{total_daily:,.0f} m³</h2>
-            <p style="margin:0; font-size:1.2rem; opacity: 0.9;">{selected_date.strftime('%A, %B %d, %Y')}</p>
+        <div style="background:{'#1e293b' if st.session_state.get('dark_mode') else 'white'}; padding:40px; border-radius:20px; box-shadow:0 20px 40px -10px rgba(0,0,0,0.2); text-align:center; border:1px solid #334155;">
+            <h1 style="color:{'#f8fafc' if st.session_state.get('dark_mode') else '#0f172a'}; margin-bottom:0;">KBRC DASHBOARD</h1>
+            <p style="color:#64748b; font-size:0.9rem; letter-spacing:1px; margin-bottom:30px;">SECURE LOGIN</p>
         </div>
         """, unsafe_allow_html=True)
         
-        st.subheader(f"Detailed Data for {selected}")
-        st.dataframe(df_hist_disp, use_container_width=True)
-        
-        st.markdown("### Daily Analytics")
-        st.plotly_chart(pie_chart(df_hist_disp, "Production for the Day", theme_colors, f"Share — {selected}"), use_container_width=True)
-        st.plotly_chart(bar_chart(df_hist_disp, "Production for the Day", theme_colors, f"Daily — {selected}"), use_container_width=True)
-        st.plotly_chart(line_chart(df_hist_disp, "Production for the Day", theme_colors, f"Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(area_chart(df_hist_disp, "Production for the Day", theme_colors, f"Flow — {selected}"), use_container_width=True)
-        
-        st.markdown("### Accumulative Analytics")
-        acc_hist = df_hist_disp[["Plant", "Accumulative Production"]].copy()
-        acc_hist = acc_hist.sort_values("Accumulative Production", ascending=False)
-        st.plotly_chart(bar_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative — {selected}"), use_container_width=True)
-        st.plotly_chart(line_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Trend — {selected}"), use_container_width=True)
-        st.plotly_chart(area_chart(acc_hist, "Accumulative Production", theme_colors, f"Accumulative Flow — {selected}"), use_container_width=True)
-        
-        excel_file = generate_excel_report(df_hist_disp, selected)
-        st.download_button(
-            "Download Excel Report",
-            excel_file,
-            f"report_{selected}.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary"
-        )
+        with st.form("login"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("Access Dashboard", type="primary", use_container_width=True):
+                if check_credentials(u, p):
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = u
+                    st.rerun()
+                else: st.error("Access Denied")
+    st.stop()
+
+# SIDEBAR CONFIGURATION
+user = st.session_state["username"]
+st.sidebar.markdown(f"""
+<div style="padding:20px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:20px; background-color: {'#1e293b' if st.session_state['dark_mode'] else '#ffffff'};">
+    <div style="color:#64748b; font-size:0.8rem; font-weight:600; text-transform:uppercase;">{get_greeting()}</div>
+    <div style="color:{'#f8fafc' if st.session_state['dark_mode'] else '#0f172a'}; font-size:1.4rem; font-weight:800; margin-top:4px;">{user.title()}</div>
+    <div style="margin-top:10px; display:flex; align-items:center;">
+        <span style="height:10px; width:10px; background-color:#10b981; border-radius:50%; margin-right:8px; display:inline-block;"></span>
+        <span style="color:#10b981; font-size:0.8rem; font-weight:600;">System Active</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+menu = ["Analytics", "Upload New Data", "Historical Archives", "Data Management"]
+if user == "manager": menu.append("Audit Logs")
+mode = st.sidebar.radio("Navigation", menu)
+
+st.sidebar.markdown("---")
+
+# DARK MODE TOGGLE
+is_dark = st.sidebar.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"])
+if is_dark != st.session_state["dark_mode"]:
+    st.session_state["dark_mode"] = is_dark
+    st.rerun()
+
+# THEME SELECTOR
+theme_list = ["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"]
+theme_sel = st.sidebar.selectbox("Chart Theme", theme_list,
+                                 index=theme_list.index(st.session_state.get("theme", "Neon Cyber")))
+if theme_sel != st.session_state.get("theme"):
+    st.session_state["theme"] = theme_sel
+    # No rerun here to avoid infinite loop when using the selectbox default logic
+    st.session_state.up_date = st.session_state.up_date # dummy change to trigger state update
+
+current_theme_colors = get_theme_colors(st.session_state.get("theme", "Neon Cyber"))
+alert_threshold = st.sidebar.number_input("Alert Threshold (m³)", 50.0, step=10.0)
+
+if st.sidebar.button("Logout"):
+    log_event(user, "Logout")
+    st.session_state.clear()
+    st.rerun()
 
 # ========================================
-# MANAGE DATA
+# MODULE 1: EXECUTIVE ANALYTICS
 # ========================================
-elif mode == "Manage Data":
-    st.header("Manage Saved Files")
-    saved_list = list_saved_dates()
-    if not saved_list:
-        st.info("No saved files to manage.")
-    else:
-        st.write(f"Found {len(saved_list)} file(s):")
-        for date_str in saved_list:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.write(f"📅 **{date_str}**")
-            with col2:
-                if st.button("Delete", key=f"del_{date_str}"):
-                    if delete_saved(date_str):
-                        st.success(f"Deleted {date_str}")
-                        log_event(current_user, f"Deleted data for {date_str}")
-                        st.rerun()
-                    else:
-                        st.error("Failed to delete.")
-            with col3:
-                if st.button("Download", key=f"dl_{date_str}"):
-                    try:
-                        df = load_saved(date_str)
-                        excel = generate_excel_report(df, date_str)
-                        st.download_button(
-                            label="Download",
-                            data=excel,
-                            file_name=f"{date_str}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"dl_btn_{date_str}"
-                        )
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-# ========================================
-# ANALYTICS
-# ========================================
-elif mode == "Analytics":
-    st.header("Analytics & Trends")
-
+if mode == "Analytics":
+    st.title("Executive Analytics")
+    
     saved = list_saved_dates()
     if len(saved) < 2:
-        st.info("Insufficient data for analytics. Please upload at least 2 days of data.")
+        st.warning("Insufficient data. Please upload at least 2 days of production records.")
         st.stop()
-
-    # Session state for Analytics dates
-    if "an_start" not in st.session_state:
-        st.session_state.an_start = datetime.today() - timedelta(days=30)
-    if "an_end" not in st.session_state:
-        st.session_state.an_end = datetime.today()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input("Start Date", value=st.session_state.an_start, key="an_start_picker")
-        st.session_state.an_start = start_date
-    with col2:
-        end_date = st.date_input("End Date", value=st.session_state.an_end, key="an_end_picker")
-        st.session_state.an_end = end_date
-
-    # Load all data
+        
+    # DATE FILTERING
+    c1, c2 = st.columns(2)
+    # Ensure date inputs are within the bounds of existing data for consistency
+    min_date = datetime.strptime(saved[-1], "%Y-%m-%d").date()
+    max_date = datetime.strptime(saved[0], "%Y-%m-%d").date()
+    
+    with c1: start_d = st.date_input("Start Date", value=min(max_date, datetime.today().date() - timedelta(days=30)), min_value=min_date, max_value=max_date)
+    with c2: end_d = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+    
+    # Ensure start date is before or equal to end date
+    if start_d > end_d:
+        st.error("Start Date cannot be after End Date.")
+        st.stop()
+        
+    # DATA LOADING
     frames = []
     for d in saved:
         try:
             df = load_saved(d)
-            df["Date"] = pd.to_datetime(df["Date"])
-            # Ensure filtering happens immediately to remove 'TOTAL' rows that skew math
-            df = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+            df['Date'] = pd.to_datetime(df['Date'])
+            # Filter out rows that contain 'TOTAL' in 'Plant' column (case-insensitive)
+            df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
             frames.append(df)
-        except:
-            continue
-
-    if not frames:
-        st.error("No data found.")
+        except: continue
+        
+    if not frames: st.stop()
+    full_df = pd.concat(frames, ignore_index=True)
+    
+    # STRICT FILTERING 
+    mask = (full_df['Date'] >= pd.to_datetime(start_d)) & (full_df['Date'] <= pd.to_datetime(end_d))
+    df_filtered = full_df[mask].copy().sort_values('Date')
+    
+    if df_filtered.empty:
+        st.info("No data available for the selected date range.")
         st.stop()
+        
+    df_filtered = safe_numeric(df_filtered)
+    # Deduplicate to ensure one entry per Plant per Date
+    df_filtered = df_filtered.drop_duplicates(subset=['Date', 'Plant'], keep='last')
 
-    all_df = pd.concat(frames, ignore_index=True)
-
-    filtered_df = all_df[
-        (all_df['Date'] >= pd.to_datetime(start_date)) &
-        (all_df['Date'] <= pd.to_datetime(end_date))
-    ].copy()
-
-    if filtered_df.empty:
-        st.warning("No data found in selected range.")
-        st.stop()
-
-    # Data Cleaning and Sorting
-    filtered_df = safe_numeric(filtered_df)
-    filtered_df = filtered_df.drop_duplicates(subset=['Date', 'Plant'], keep='last') # Prevent double counting
-    filtered_df = filtered_df.sort_values(['Plant', 'Date']).reset_index(drop=True)
-
-    # EXACT CALCULATION: Sum of filtered daily production
-    total_daily_all = filtered_df["Production for the Day"].sum()
-
+    # KEY METRICS HEADER
+    total_vol = df_filtered['Production for the Day'].sum()
+    avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
+    
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #0f172a, #334155);
-             color: white; padding: 50px; border-radius: 15px; text-align: center;
-             margin: 30px 0; box-shadow: 0 15px 40px rgba(0,0,0,0.3);">
-        <h1 style="margin:0; font-size:2.5rem; letter-spacing:2px; opacity:0.9;">AGGREGATED PRODUCTION</h1>
-        <h2 style="margin:20px 0; font-size:4.5rem;">{total_daily_all:,.0f} m³</h2>
-        <p style="margin:0; font-size:1.2rem; color: #cbd5e1;">
-            {start_date.strftime('%b %d')} to {end_date.strftime('%b %d, %Y')} • All Plants
-        </p>
+    <div class="hero-banner">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; text-align:center;">
+            <div>
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Selected Period Volume</div>
+                <div style="font-size:3rem; font-weight:800;">{total_vol:,.0f} m³</div>
+            </div>
+            <div style="border-left:1px solid rgba(255,255,255,0.2);">
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Daily Average</div>
+                <div style="font-size:3rem; font-weight:800;">{avg_daily:,.0f} m³</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ============================
-    # FIXED TOP 3 ACCUMULATIVE
-    # ============================
-    filtered_df['Month'] = filtered_df['Date'].dt.to_period('M').astype(str)
+    # INNOVATION: SMART INSIGHTS
+    st.markdown(f"""<div class="insight-box">{generate_smart_insights(df_filtered)}</div>""", unsafe_allow_html=True)
 
-    monthly_acc_for_top3 = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
-    latest_month = monthly_acc_for_top3['Month'].max()
+    # TABS FOR WEEKLY / MONTHLY SPLIT
+    tab_week, tab_month = st.tabs(["📅 Weekly Performance", "📆 Monthly Performance"])
 
-    latest_cumulative = monthly_acc_for_top3[
-        monthly_acc_for_top3['Month'] == latest_month
-    ][['Plant', 'Accumulative Production']].copy()
-
-    latest_cumulative = latest_cumulative.sort_values('Accumulative Production', ascending=False).reset_index(drop=True)
-
-    # ============================
-    # AVERAGE DAILY TOP 3
-    # ============================
-    avg_daily = filtered_df.groupby('Plant')['Production for the Day'].mean().round(1)
-    top_avg = avg_daily.sort_values(ascending=False).head(3).reset_index()
-
-    st.markdown("## 🏆 Performance Leaders")
-    colA, colB = st.columns(2)
-
-    with colA:
-        st.markdown("### Average Daily Production")
-        for i, row in top_avg.iterrows():
-            rank = ["1st", "2nd", "3rd"][i]
-            color = ["#FFD700", "#C0C0C0", "#CD7F32"][i]
-            st.markdown(f"""
-            <div style="background:white; padding:20px; border-radius:10px; margin:10px 0;
-                        border-left:10px solid {color}; box-shadow:0 5px 15px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <span style="color:{color}; font-weight:bold; font-size:1.2rem;">{rank}</span>
-                    <span style="font-weight:600; font-size:1.2rem; margin-left:15px;">{row['Plant']}</span>
-                </div>
-                <div style="font-weight:800; font-size:1.5rem;">{row['Production for the Day']:,.1f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    with colB:
-        st.markdown("### Latest Accumulative Total")
-        for i, row in latest_cumulative.head(3).iterrows():
-            rank = ["1st", "2nd", "3rd"][i]
-            color = ["#1E90FF", "#4682B4", "#5F9EA0"][i]
-            st.markdown(f"""
-            <div style="background:white; padding:20px; border-radius:10px; margin:10px 0;
-                        border-left:10px solid {color}; box-shadow:0 5px 15px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <span style="color:{color}; font-weight:bold; font-size:1.2rem;">{rank}</span>
-                    <span style="font-weight:600; font-size:1.2rem; margin-left:15px;">{row['Plant']}</span>
-                </div>
-                <div style="font-weight:800; font-size:1.5rem;">{row['Accumulative Production']:,.1f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # ============================
-    # CHARTS
-    # ============================
-    filtered_df['Custom_Week'] = ((filtered_df['Date'] - filtered_df['Date'].min()).dt.days // 7) + 1
-
-    weekly_daily = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Production for the Day'].sum()
-    monthly_daily = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Production for the Day'].sum()
-
-    weekly_acc = filtered_df.groupby(['Custom_Week', 'Plant'], as_index=False)['Accumulative Production'].last()
-    monthly_acc = filtered_df.groupby(['Month', 'Plant'], as_index=False)['Accumulative Production'].last()
-
-    st.markdown("---")
-    
-    st.markdown("### 📈 Time-Based Analysis")
-    st.info("Note: Weekly and Monthly Production charts display the Sum of Daily Production. Accumulative charts display the reading at the end of the period.")
-
-    st.subheader("Weekly Production (Sum)")
-    st.plotly_chart(aggregated_bar_chart(weekly_daily, "Production for the Day", "Custom_Week", theme_colors, "Weekly Production Sum"), use_container_width=True)
-
-    st.subheader("Monthly Production (Sum)")
-    st.plotly_chart(aggregated_bar_chart(monthly_daily, "Production for the Day", "Month", theme_colors, "Monthly Production Sum"), use_container_width=True)
-
-    st.subheader("Weekly Accumulative (End of Week)")
-    st.plotly_chart(aggregated_bar_chart(weekly_acc, "Accumulative Production", "Custom_Week", theme_colors, "Weekly Accumulative Snapshot"), use_container_width=True)
-
-    st.subheader("Monthly Accumulative (End of Month)")
-    st.plotly_chart(aggregated_bar_chart(monthly_acc, "Accumulative Production", "Month", theme_colors, "Monthly Accumulative Snapshot"), use_container_width=True)
-
-# ========================================
-# LOGS VIEWER (MANAGER ONLY)
-# ========================================
-elif mode == "Logs":
-    if current_user != "manager":
-        st.error("Access Denied.")
-    else:
-        st.header("Security & Access Logs")
+    # --- WEEKLY ANALYSIS ---
+    with tab_week:
+        st.subheader("Weekly Analytics")
+        # Aggregation Logic
+        week_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='W-MON')]).agg({
+            'Production for the Day': ['sum', 'mean'],
+            # Max of accumulative production over the week is used as the end-of-week accumulative value
+            'Accumulative Production': 'max' 
+        }).reset_index()
+        week_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
         
-        logs_df = get_logs()
-        if logs_df.empty:
-            st.info("No logs recorded yet.")
-        else:
-            # Sort by timestamp descending
-            logs_df = logs_df.sort_index(ascending=False)
+        # Format Date Label
+        week_agg['Week Label'] = week_agg['Date'].dt.strftime('Wk %W (%d %b)')
+        
+        # Post-Aggregation Filter (Ensure we only show data within the selection)
+        week_agg = week_agg[(week_agg['Date'] >= pd.to_datetime(start_d)) & (week_agg['Date'] <= pd.to_datetime(end_d))]
+
+        c_w1, c_w2 = st.columns(2)
+        with c_w1:
+            fig = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
+                         title="Weekly Total Production (Sum)", barmode='group',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
-            st.markdown("### Recent Activity")
-            st.dataframe(logs_df, use_container_width=True, height=500)
+        with c_w2:
+            fig = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
+                         title="Weekly Average Production (Mean)", barmode='group',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
-            csv = logs_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "Download Logs CSV",
-                csv,
-                "access_logs.csv",
-                "text/csv",
-                key='download-logs'
-            )
+        st.markdown("#### Weekly Accumulative Trend")
+        fig_acc = px.line(week_agg, x='Week Label', y='Accumulative', color='Plant', markers=True,
+                          title="Plant Accumulative Production over Selected Weeks",
+                          color_discrete_sequence=current_theme_colors)
+        st.plotly_chart(apply_chart_theme(fig_acc), use_container_width=True)
+
+    # --- MONTHLY ANALYSIS ---
+    with tab_month:
+        st.subheader("Monthly Analytics")
+        # Aggregation Logic for Monthly data
+        month_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='M')]).agg({
+            'Production for the Day': ['sum', 'mean'],
+            'Accumulative Production': 'max'
+        }).reset_index()
+        month_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
+        month_agg['Month Label'] = month_agg['Date'].dt.strftime('%B %Y')
+        
+        # Post-Aggregation Filter
+        month_agg = month_agg[(month_agg['Date'] >= pd.to_datetime(start_d)) & (month_agg['Date'] <= pd.to_datetime(end_d))]
+
+        c_m1, c_m2 = st.columns(2)
+        with c_m1:
+            fig = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
+                         title="Monthly Total Production (Sum)", barmode='group',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            
+        with c_m2:
+            fig = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
+                         title="Monthly Average Production (Mean)", barmode='group',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            
+        # NEW REQUESTED CHART: Monthly Accumulative Trend
+        st.markdown("#### Monthly Accumulative Trend (End-of-Month Snapshot)")
+        fig_acc_m = px.line(month_agg, x='Month Label', y='Accumulative', color='Plant', markers=True,
+                            title="Plant Accumulative Production Trend by Month",
+                            color_discrete_sequence=current_theme_colors)
+        st.plotly_chart(apply_chart_theme(fig_acc_m), use_container_width=True)
+
+# ========================================
+# MODULE 2: UPLOAD DATA
+# ========================================
+elif mode == "Upload New Data":
+    st.title("Daily Production Entry")
+    c1, c2 = st.columns([2, 1])
+    with c1: uploaded = st.file_uploader("Upload Excel File", type=["xlsx"])
+    with c2:
+        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today().date()
+        sel_date = st.date_input("Production Date", value=st.session_state.up_date)
+        st.session_state.up_date = sel_date
+        
+    if uploaded:
+        try:
+            df = pd.read_excel(uploaded)
+            df.columns = df.columns.str.strip()
+            missing = [c for c in REQUIRED_COLS if c not in df.columns]
+            if missing: st.error(f"Missing Columns: {missing}")
+            else:
+                st.dataframe(df.head(), use_container_width=True)
+                if st.button("✅ Approve & Save", type="primary"):
+                    df_clean = df.copy()
+                    df_clean['Date'] = sel_date.strftime("%Y-%m-%d")
+                    save_path = save_csv(df_clean, sel_date, overwrite=True)
+                    log_event(user, f"Uploaded {sel_date}")
+                    
+                    # Git push attempt
+                    success, message = attempt_git_push(save_path, f"Upload daily data for {sel_date}")
+                    if success:
+                        st.sidebar.success("Data synced to remote repository.")
+                    else:
+                        st.sidebar.warning(f"Data saved locally. Git sync failed: {message}")
+                    
+                    # Show Success
+                    df_disp = df_clean[~df_clean["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+                    df_disp = safe_numeric(df_disp)
+                    tot = df_disp["Production for the Day"].sum()
+                    st.success(f"Saved! Total: {format_m3(tot)}")
+                    st.rerun() # Rerun to refresh the list of dates
+
+        except FileExistsError:
+             st.error(f"Error: Data for {sel_date.strftime('%Y-%m-%d')} already exists. Please delete it in 'Data Management' or change the date.")
+        except Exception as e: 
+             st.error(f"Error processing file: {e}")
+
+# ========================================
+# MODULE 3: DATA MANAGEMENT
+# ========================================
+elif mode == "Data Management":
+    st.title("Database Management")
+    files = list_saved_dates()
+    if not files: st.info("No records.")
+    else:
+        for f in files:
+            with st.expander(f"📂 {f}", expanded=False):
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    df = load_saved(f)
+                    xl = generate_excel_report(df, f)
+                    st.download_button("Download Excel", xl, f"{f}.xlsx", key=f"d_{f}", use_container_width=True)
+                
+                with c2:
+                    if st.button("Delete Record", key=f"del_{f}", type="primary", use_container_width=True):
+                        if delete_saved(f):
+                            log_event(user, f"Deleted {f}")
+                            # Attempt Git sync for deletion
+                            attempt_git_push(Path(DATA_DIR / f"{f}.csv"), f"Delete data for {f}")
+                            st.toast(f"Successfully deleted record for {f}.")
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to delete record for {f}.")
+
+                with c3:
+                    st.info(f"Size: {os.path.getsize(DATA_DIR / f'{f}.csv') / 1024:.2f} KB")
+
+# ========================================
+# MODULE 4: HISTORICAL ARCHIVES
+# ========================================
+elif mode == "Historical Archives":
+    st.title("Historical Data")
+    files = list_saved_dates()
+    if not files: st.info("No historical records available."); st.stop()
+    
+    # Pre-select the most recent date
+    latest_date = datetime.strptime(files[0], "%Y-%m-%d").date()
+    if "hist_d" not in st.session_state: 
+        st.session_state.hist_d = latest_date
+        
+    sel_d = st.date_input("Select Date", 
+                          value=st.session_state.hist_d, 
+                          min_value=datetime.strptime(files[-1], "%Y-%m-%d").date(),
+                          max_value=latest_date
+    )
+    st.session_state.hist_d = sel_d
+    d_str = sel_d.strftime("%Y-%m-%d")
+    
+    if d_str in files:
+        df = load_saved(d_str)
+        df = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        df = safe_numeric(df)
+        tot = df["Production for the Day"].sum()
+        
+        st.markdown(f"""
+        <div style="background:{'#1e293b' if st.session_state['dark_mode'] else '#1e3a8a'}; color:white; padding:30px; border-radius:12px; margin-bottom:20px;">
+            <h2 style="margin:0; color:white !important;">Production Overview for {sel_d.strftime('%A, %B %d, %Y')}</h2>
+            <div style="font-size:3rem; font-weight:800;">{format_m3(tot)}</div>
+            <p style="font-size:0.9rem; opacity:0.9;">Total Daily Volume</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("### Raw Data Table")
+        st.dataframe(df, use_container_width=True)
+        
+        st.markdown("### Daily Performance Charts")
+        # Quick Charts
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = px.pie(df, names='Plant', values='Production for the Day', 
+                         title="Daily Production Distribution by Plant",
+                         color_discrete_sequence=current_theme_colors)
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+        with c2:
+            fig = px.bar(df, x='Plant', y='Production for the Day', color='Plant', 
+                         title="Daily Production Volume",
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+    else:
+        st.error(f"No record found for the date: {d_str}")
+
+# ========================================
+# MODULE 5: AUDIT LOGS (MANAGER ONLY)
+# ========================================
+elif mode == "Audit Logs":
+    # Manager Log Fixes (enforced check and clear display)
+    if user != "manager": 
+        st.error("Access Restricted. Only managers can view audit logs.")
+        log_event(user, "Unauthorized access attempt to Audit Logs")
+        st.stop()
+        
+    st.title("Security Audit Logs")
+    
+    # Filter Controls (DATE PICKER ADDED FOR PERMANENCE VIEW)
+    log_date = st.date_input("Filter by Date", value=datetime.today().date())
+    
+    logs = get_logs()
+    if not logs.empty:
+        logs['Timestamp'] = pd.to_datetime(logs['Timestamp'])
+        
+        # Filter Logic to show specific date logs
+        start_ts = pd.to_datetime(log_date)
+        end_ts = start_ts + timedelta(days=1) - timedelta(seconds=1) # Ensure it doesn't leak into the next day
+        
+        daily_logs = logs[(logs['Timestamp'] >= start_ts) & (logs['Timestamp'] <= end_ts)].sort_values('Timestamp', ascending=False)
+        
+        st.markdown(f"**Showing {len(daily_logs)} log events for: {log_date.strftime('%Y-%m-%d')}**")
+        st.dataframe(daily_logs, use_container_width=True, height=500)
+        
+        # Download Button to save history
+        st.download_button("Export Daily Log", daily_logs.to_csv(index=False).encode(), f"audit_log_{log_date}.csv", "text/csv")
+        st.download_button("Export Full History", logs.to_csv(index=False).encode(), "full_audit_history.csv", "text/csv")
+    else:
+        st.info("No logs found.")
 
 # ========================================
 # FOOTER
 # ========================================
 st.sidebar.markdown("---")
-st.sidebar.caption("Support")
 st.sidebar.markdown("""
-<div style="font-size:0.85rem; color:#666;">
+<div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
     <strong>Eng. Ashwin Joseph Mathew</strong><br>
     Head of IT<br>
-    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="text-decoration:none; color:#3b82f6;">Ashwin.IT@kbrc.com.kw</a>
+    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color:#3b82f6; text-decoration:none;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
