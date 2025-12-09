@@ -29,6 +29,8 @@ st.set_page_config(
 # ========================================
 if "dark_mode" not in st.session_state:
     st.session_state["dark_mode"] = False
+if "theme" not in st.session_state: # Initialize theme state safely
+    st.session_state["theme"] = "Executive Blue"
 
 # ========================================
 # 3. CSS STYLING (DYNAMIC LIGHT/DARK)
@@ -137,6 +139,11 @@ def inject_css():
             margin-bottom: 20px;
             color: {text_color};
         }}
+        
+        /* ADD SPACE BETWEEN HEADERS AND CHARTS/CONTENT */
+        .stPlotlyChart {{ margin-top: 15px; }}
+        .stMarkdown h4 + div, .stMarkdown h3 + div {{ margin-top: 15px; }}
+        
     </style>
     """, unsafe_allow_html=True)
 
@@ -155,6 +162,7 @@ SECRETS = {}
 try: SECRETS = dict(st.secrets)
 except: SECRETS = {}
 
+# Use default values if running outside of a secrets environment
 GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
 GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
@@ -196,7 +204,7 @@ def init_logs():
 def log_event(username: str, event: str):
     init_logs()
     try:
-        # Use Kuwait Time for logging to fix "time off by miles"
+        # Use Kuwait Time for logging
         ts = get_kuwait_time().strftime("%Y-%m-%d %H:%M:%S")
         with open(LOG_FILE, 'a', newline='') as f:
             csv.writer(f).writerow([ts, username, event])
@@ -252,7 +260,7 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
         payload = {"message": msg, "content": content, "branch": "main", "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}}
         if sha: payload["sha"] = sha
         r = requests.put(url, headers=headers, json=payload)
-        return r.ok, "Synced" if r.ok else "Sync Failed"
+        return r.ok, "Synced" if r.ok else f"Sync Failed: {r.status_code} - {r.text}"
     except Exception as e: return False, str(e)
 
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
@@ -260,7 +268,6 @@ def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
     # Smart Fill: fill missing accumulative data within the same plant group
-    # Ensure 'Date' is datetime object before running this, though it should be safe here
     df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
     return df2
 
@@ -316,7 +323,7 @@ def get_theme_colors(theme_name):
         "Royal Purple": ["#581C87", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD"], # Solid Purples
         "Crimson Tide": ["#991B1B", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]  # Solid Reds
     }
-    return themes.get(theme_name, themes["Neon Cyber"])
+    return themes.get(theme_name, themes["Executive Blue"])
 
 def apply_chart_theme(fig):
     """
@@ -397,13 +404,15 @@ if is_dark != st.session_state["dark_mode"]:
 # THEME SELECTOR
 theme_list = ["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"]
 theme_sel = st.sidebar.selectbox("Chart Theme", theme_list,
-                                 index=theme_list.index(st.session_state.get("theme", "Neon Cyber")))
+                                 index=theme_list.index(st.session_state.get("theme", "Executive Blue")))
+
+# SAFELY UPDATE THEME STATE
 if theme_sel != st.session_state.get("theme"):
     st.session_state["theme"] = theme_sel
-    # No rerun here to avoid infinite loop when using the selectbox default logic
-    st.session_state.up_date = st.session_state.up_date # dummy change to trigger state update
+    # Rerun only if a change occurred to apply new colors immediately
+    st.rerun()
 
-current_theme_colors = get_theme_colors(st.session_state.get("theme", "Neon Cyber"))
+current_theme_colors = get_theme_colors(st.session_state["theme"])
 alert_threshold = st.sidebar.number_input("Alert Threshold (m³)", 50.0, step=10.0)
 
 if st.sidebar.button("Logout"):
@@ -428,8 +437,18 @@ if mode == "Analytics":
     min_date = datetime.strptime(saved[-1], "%Y-%m-%d").date()
     max_date = datetime.strptime(saved[0], "%Y-%m-%d").date()
     
-    with c1: start_d = st.date_input("Start Date", value=min(max_date, datetime.today().date() - timedelta(days=30)), min_value=min_date, max_value=max_date)
-    with c2: end_d = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+    # Initialize date state safely
+    if "start_d" not in st.session_state:
+        st.session_state.start_d = min(max_date, datetime.today().date() - timedelta(days=30))
+    if "end_d" not in st.session_state:
+        st.session_state.end_d = max_date
+    
+    with c1: 
+        start_d = st.date_input("Start Date", value=st.session_state.start_d, min_value=min_date, max_value=max_date)
+        st.session_state.start_d = start_d
+    with c2: 
+        end_d = st.date_input("End Date", value=st.session_state.end_d, min_value=min_date, max_value=max_date)
+        st.session_state.end_d = end_d
     
     # Ensure start date is before or equal to end date
     if start_d > end_d:
@@ -506,14 +525,16 @@ if mode == "Analytics":
 
         c_w1, c_w2 = st.columns(2)
         with c_w1:
+            st.markdown("#### Weekly Total Production (Sum)")
             fig = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
-                         title="Weekly Total Production (Sum)", barmode='group',
+                         barmode='group',
                          color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
         with c_w2:
+            st.markdown("#### Weekly Average Production (Mean)")
             fig = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
-                         title="Weekly Average Production (Mean)", barmode='group',
+                         barmode='group',
                          color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
@@ -539,14 +560,16 @@ if mode == "Analytics":
 
         c_m1, c_m2 = st.columns(2)
         with c_m1:
+            st.markdown("#### Monthly Total Production (Sum)")
             fig = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
-                         title="Monthly Total Production (Sum)", barmode='group',
+                         barmode='group',
                          color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
         with c_m2:
+            st.markdown("#### Monthly Average Production (Mean)")
             fig = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
-                         title="Monthly Average Production (Mean)", barmode='group',
+                         barmode='group',
                          color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
@@ -564,11 +587,17 @@ elif mode == "Upload New Data":
     st.title("Daily Production Entry")
     c1, c2 = st.columns([2, 1])
     with c1: uploaded = st.file_uploader("Upload Excel File", type=["xlsx"])
+    
+    # Initialize 'up_date' safely
+    if "up_date" not in st.session_state: 
+        st.session_state.up_date = datetime.today().date()
+
     with c2:
-        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today().date()
         sel_date = st.date_input("Production Date", value=st.session_state.up_date)
-        st.session_state.up_date = sel_date
-        
+        # Update session state only after date is selected
+        if sel_date != st.session_state.up_date:
+            st.session_state.up_date = sel_date
+            
     if uploaded:
         try:
             df = pd.read_excel(uploaded)
@@ -630,7 +659,10 @@ elif mode == "Data Management":
                             st.error(f"Failed to delete record for {f}.")
 
                 with c3:
-                    st.info(f"Size: {os.path.getsize(DATA_DIR / f'{f}.csv') / 1024:.2f} KB")
+                    try:
+                        st.info(f"Size: {os.path.getsize(DATA_DIR / f'{f}.csv') / 1024:.2f} KB")
+                    except:
+                        st.info("Size N/A")
 
 # ========================================
 # MODULE 4: HISTORICAL ARCHIVES
@@ -642,6 +674,8 @@ elif mode == "Historical Archives":
     
     # Pre-select the most recent date
     latest_date = datetime.strptime(files[0], "%Y-%m-%d").date()
+    
+    # Initialize 'hist_d' safely
     if "hist_d" not in st.session_state: 
         st.session_state.hist_d = latest_date
         
@@ -650,7 +684,10 @@ elif mode == "Historical Archives":
                           min_value=datetime.strptime(files[-1], "%Y-%m-%d").date(),
                           max_value=latest_date
     )
-    st.session_state.hist_d = sel_d
+    # Update session state
+    if sel_d != st.session_state.hist_d:
+        st.session_state.hist_d = sel_d
+    
     d_str = sel_d.strftime("%Y-%m-%d")
     
     if d_str in files:
@@ -674,14 +711,14 @@ elif mode == "Historical Archives":
         # Quick Charts
         c1, c2 = st.columns(2)
         with c1:
+            st.markdown("#### Production Distribution")
             fig = px.pie(df, names='Plant', values='Production for the Day', 
-                         title="Daily Production Distribution by Plant",
                          color_discrete_sequence=current_theme_colors)
             fig.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
         with c2:
+            st.markdown("#### Daily Production Volume by Plant")
             fig = px.bar(df, x='Plant', y='Production for the Day', color='Plant', 
-                         title="Daily Production Volume",
                          color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
     else:
@@ -700,7 +737,10 @@ elif mode == "Audit Logs":
     st.title("Security Audit Logs")
     
     # Filter Controls (DATE PICKER ADDED FOR PERMANENCE VIEW)
-    log_date = st.date_input("Filter by Date", value=datetime.today().date())
+    if "log_date" not in st.session_state:
+        st.session_state.log_date = datetime.today().date()
+        
+    log_date = st.date_input("Filter by Date", value=st.session_state.log_date)
     
     logs = get_logs()
     if not logs.empty:
