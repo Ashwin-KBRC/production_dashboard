@@ -150,7 +150,8 @@ inject_css()
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
-FORECAST_FILE = DATA_DIR / "forecast_data.csv"
+# Updated: Use a directory for monthly forecasts
+FORECAST_DIR = DATA_DIR / "forecast" 
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
 # AUTH SECRETS (Defaulting for safety)
@@ -197,70 +198,40 @@ def get_logs() -> pd.DataFrame:
     try: return pd.read_csv(LOG_FILE)
     except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
-# FORECAST MANAGEMENT
-def init_forecasts():
-    """Ensures forecast file exists and populates a default target if empty."""
-    try:
-        df = pd.read_csv(FORECAST_FILE)
-    except FileNotFoundError:
-        df = pd.DataFrame(columns=["Year", "Month", "Target"])
-    except pd.errors.EmptyDataError:
-        df = pd.DataFrame(columns=["Year", "Month", "Target"])
-
-    # If the file is newly created or empty, add a default target for the current month
-    if df.empty:
-        current_kwt_time = get_kuwait_time()
-        # Set a target for the current month
-        current_year = current_kwt_time.year
-        current_month = current_kwt_time.strftime("%B")
-        
-        # Default target value to prevent 0s on the dashboard
-        default_target = 40000.0 
-        
-        # Check if the entry already exists (in case of EmptyDataError on existing file)
-        if not ((df['Year'] == current_year) & (df['Month'] == current_month)).any():
-            new_entry = pd.DataFrame([{"Year": current_year, "Month": current_month, "Target": default_target}])
-            df = pd.concat([df, new_entry], ignore_index=True)
-            
-    df.to_csv(FORECAST_FILE, index=False)
-
-
+# FORECAST MANAGEMENT (UPDATED TO USE FOLDER/FILE PER MONTH)
 def save_forecast_entry(year: int, month: str, target: float):
-    """Saves a forecast entry to the CSV database."""
-    init_forecasts()
-    try:
-        df = pd.read_csv(FORECAST_FILE)
-    except:
-        df = pd.DataFrame(columns=["Year", "Month", "Target"])
+    """Saves a forecast entry as a CSV file in the forecast directory."""
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Clean inputs
-    year = int(year)
-    month = str(month).strip()
-    target = float(target)
-
-    # Remove existing entry for this month/year to overwrite
-    df = df[~((df['Year'] == year) & (df['Month'] == month))]
+    # Filename: YYYY-MonthName.csv
+    fname = f"{int(year)}-{str(month).strip()}.csv"
+    p = FORECAST_DIR / fname
     
-    new_entry = pd.DataFrame([{"Year": year, "Month": month, "Target": target}])
-    df = pd.concat([df, new_entry], ignore_index=True)
-    df.to_csv(FORECAST_FILE, index=False)
+    # Create a simple DataFrame with the target value
+    data = pd.DataFrame([{"Target": float(target)}])
+    data.to_csv(p, index=False)
 
 def get_forecast(year: int, month: str) -> float:
-    """Retrieves target for specific month/year."""
-    init_forecasts()
-    try:
-        df = pd.read_csv(FORECAST_FILE)
-        # Ensure correct types for comparison
-        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(-1).astype(int)
-        df['Month'] = df['Month'].astype(str)
-        df['Target'] = pd.to_numeric(df['Target'], errors='coerce').fillna(0.0)
-        
-        row = df[(df['Year'] == int(year)) & (df['Month'] == str(month))]
-        if not row.empty:
-            return float(row.iloc[0]['Target'])
-    except Exception as e:
-        # print(f"Error reading forecast: {e}") # Log error for debugging if needed
-        pass
+    """Retrieves target from the specific monthly CSV file."""
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True) # Ensure directory exists when reading
+    
+    fname = f"{int(year)}-{str(month).strip()}.csv"
+    p = FORECAST_DIR / fname
+    
+    if p.exists():
+        try:
+            df = pd.read_csv(p)
+            # Find the 'Target' column and get the first numeric value
+            if not df.empty and 'Target' in df.columns:
+                target_val = pd.to_numeric(df['Target'].iloc[0], errors='coerce')
+                if not pd.isna(target_val):
+                    return float(target_val)
+        except Exception:
+            # Handle file read errors gracefully
+            pass 
+    
+    # Return a default value if file is missing or corrupted
+    # The default 40000.0 is now handled by the UI / input validation if manager hasn't set it.
     return 0.0
 
 # AUTH
@@ -282,9 +253,10 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     return p
 
 def list_saved_dates() -> List[str]:
-    # Exclude system files
+    # Exclude system files and the new 'forecast' directory
+    exclude_names = {"access_logs", "monthly_targets", "forecast"} 
     return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") 
-                   if "access_logs" not in p.name and "monthly_targets" not in p.name and "forecast_data" not in p.name], reverse=True)
+                   if p.stem not in exclude_names], reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -395,51 +367,37 @@ mode = st.sidebar.radio("Navigation", menu)
 
 st.sidebar.markdown("---")
 
-# --- FORECAST UPLOAD SECTION (Manager Only) ---
+# --- FORECAST INPUT SECTION (Manager Only - UPDATED) ---
 if user == "manager":
     st.sidebar.markdown("### 🎯 Monthly Targets")
-    with st.sidebar.expander("Upload Forecast (Excel)", expanded=False):
-        # Allow manager to pick month/year context for the file
-        f_year = st.selectbox("Year", [datetime.now().year, datetime.now().year + 1])
+    with st.sidebar.expander("Set Forecast Target", expanded=False):
+        
+        f_year = st.selectbox("Year", [datetime.now().year, datetime.now().year + 1], key="f_year")
         f_month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-        f_month = st.selectbox("Month", f_month_names, index=datetime.now().month - 1)
+        f_month = st.selectbox("Month", f_month_names, index=datetime.now().month - 1, key="f_month")
         
-        # File Uploader
-        f_file = st.file_uploader("Upload Forecast File (Format: forecast-MM-YYYY)", type=["xlsx", "xls"])
+        # Check current value to pre-fill the input
+        current_target = get_forecast(f_year, f_month)
         
-        if f_file and st.button("Process & Save Target"):
+        target_input = st.number_input(
+            f"Target Volume for {f_month} {f_year} (m³)",
+            min_value=0.0,
+            value=current_target if current_target > 0 else 40000.0, # Default to 40k if current is 0
+            step=100.0,
+            format="%.0f",
+            key="target_input"
+        )
+        
+        if st.button(f"Save Target for {f_month}"):
             try:
-                # Read the excel file
-                f_df = pd.read_excel(f_file)
-                # Look for a numeric value. Assuming single value or labeled "Target"
-                val = 0.0
-                found = False
-                
-                # Try to find a column named 'Target' or 'Value' first
-                for col in f_df.columns:
-                    if "target" in str(col).lower() or "value" in str(col).lower() or "forecast" in str(col).lower():
-                         if pd.to_numeric(f_df[col], errors='coerce').notnull().any():
-                            val = float(f_df[col].dropna().iloc[0])
-                            found = True
-                            break
-                
-                # If not found, take the first numeric cell
-                if not found:
-                    for col in f_df.columns:
-                        for item in f_df[col]:
-                            if pd.to_numeric(item, errors='coerce') is not None and not pd.isna(item):
-                                val = float(item)
-                                found = True
-                                break
-                        if found: break
-                
-                if val > 0:
-                    save_forecast_entry(f_year, f_month, val)
-                    st.sidebar.success(f"Forecast of {format_m3(val)} saved for {f_month} {f_year}")
+                if target_input < 0:
+                    st.sidebar.error("Target must be a positive value.")
                 else:
-                    st.sidebar.error("Could not find a valid numeric target in the file.")
+                    save_forecast_entry(f_year, f_month, target_input)
+                    st.sidebar.success(f"Forecast of {target_input:,.0f} m³ saved for {f_month} {f_year}.")
+                    log_event(user, f"Set forecast target for {f_month} {f_year} to {target_input:,.0f} m³")
             except Exception as e:
-                st.sidebar.error(f"Error reading file: {e}")
+                st.sidebar.error(f"Error saving target: {e}")
 
 st.sidebar.markdown("---")
 
@@ -520,7 +478,10 @@ if mode == "Analytics":
     # Forecast Logic: Gets target for the month containing the start date
     forecast_month = start_d.strftime("%B")
     forecast_year = start_d.year
-    monthly_target_val = get_forecast(forecast_year, forecast_month)
+    # If no target is set, default to 40,000 for display purposes on the dashboard
+    monthly_target_val = get_forecast(forecast_year, forecast_month) 
+    if monthly_target_val == 0:
+        monthly_target_val = 40000.0 # Default fallback for display if file is missing
     
     # Calculate Variance
     variance = total_vol - monthly_target_val
@@ -535,7 +496,6 @@ if mode == "Analytics":
     expected_daily_avg = monthly_target_val / days_in_month if monthly_target_val > 0 else 0
 
     # --- HERO SECTION ---
-    # Added "Total Production" box as requested
     st.markdown(f"""
     <div class="hero-banner">
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
@@ -810,6 +770,9 @@ elif mode == "Historical Archives":
         hist_month = sel_d.strftime("%B")
         hist_year = sel_d.year
         m_target = get_forecast(hist_year, hist_month)
+        # Fallback to 40k if no file is found for that month
+        if m_target == 0: m_target = 40000.0
+            
         daily_target = m_target / 30 if m_target > 0 else 0
         
         # Create comparison DF
