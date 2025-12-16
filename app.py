@@ -150,7 +150,7 @@ inject_css()
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
-FORECAST_FILE = DATA_DIR / "monthly_targets.csv"
+FORECAST_FILE = DATA_DIR / "forecast_data.csv"
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
 # AUTH SECRETS (Defaulting for safety)
@@ -197,7 +197,7 @@ def get_logs() -> pd.DataFrame:
     try: return pd.read_csv(LOG_FILE)
     except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
-# FORECAST MANAGEMENT (NEW - FILE BASED)
+# FORECAST MANAGEMENT
 def init_forecasts():
     if not FORECAST_FILE.exists():
         with open(FORECAST_FILE, 'w', newline='') as f:
@@ -235,8 +235,7 @@ def get_forecast(year: int, month: str) -> float:
         row = df[(df['Year'] == int(year)) & (df['Month'] == str(month))]
         if not row.empty:
             return float(row.iloc[0]['Target'])
-    except Exception as e:
-        # print(f"Error reading forecast: {e}") # Debug only
+    except:
         pass
     return 0.0
 
@@ -261,7 +260,7 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
 def list_saved_dates() -> List[str]:
     # Exclude system files
     return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") 
-                   if "access_logs" not in p.name and "monthly_targets" not in p.name], reverse=True)
+                   if "access_logs" not in p.name and "monthly_targets" not in p.name and "forecast_data" not in p.name], reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -372,7 +371,6 @@ mode = st.sidebar.radio("Navigation", menu)
 st.sidebar.markdown("---")
 
 # --- FORECAST UPLOAD SECTION (Manager Only) ---
-# New feature: Upload Excel to set forecast
 if user == "manager":
     st.sidebar.markdown("### 🎯 Monthly Targets")
     with st.sidebar.expander("Upload Forecast (Excel)", expanded=False):
@@ -495,7 +493,6 @@ if mode == "Analytics":
     avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
     
     # Forecast Logic: Defaults to current month unless changed
-    # We use the start_d to determine which forecast to fetch
     forecast_month = start_d.strftime("%B")
     forecast_year = start_d.year
     monthly_target_val = get_forecast(forecast_year, forecast_month)
@@ -505,8 +502,7 @@ if mode == "Analytics":
     var_color = "#10b981" if variance >= 0 else "#ef4444" # Green if above, Red if below
     var_symbol = "+" if variance >= 0 else ""
     
-    # Expected Average (Target / 30 days approximation or actual days in month)
-    # Using 30 days standard for monthly target breakdown
+    # Expected Average (Target / 30 days)
     expected_daily_avg = monthly_target_val / 30 if monthly_target_val > 0 else 0
 
     # --- HERO SECTION ---
@@ -526,7 +522,7 @@ if mode == "Analytics":
                 <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({forecast_month})</div>
                 <div style="font-size:3rem; font-weight:800; color:{var_color};">{monthly_target_val:,.0f}</div>
                 <div style="font-size:1rem; font-weight:600; margin-top:5px;">
-                    Var: <span style="color:{var_color}">{var_symbol}{variance:,.0f} m³</span>
+                    Var: <span style="color:{var_color}">{var_symbol}{abs(variance):,.0f} m³</span>
                 </div>
             </div>
             
@@ -560,7 +556,7 @@ if mode == "Analytics":
             <div class="leaderboard-box" style="border-left-color: {border_col};">
                 <div>
                     <span class="leaderboard-rank" style="color:{border_col}">#{i+1}</span>
-                    <span style="font-weight:600;">{p_name}</span>
+                    <span class="leaderboard-val">{p_name}</span>
                 </div>
                 <span class="leaderboard-val">{format_m3(p_val)}</span>
             </div>
@@ -574,7 +570,7 @@ if mode == "Analytics":
             <div class="leaderboard-box" style="border-left-color: {border_col};">
                 <div>
                     <span class="leaderboard-rank" style="color:{border_col}">#{i+1}</span>
-                    <span style="font-weight:600;">{p_name}</span>
+                    <span class="leaderboard-val">{p_name}</span>
                 </div>
                 <span class="leaderboard-val">{format_m3(p_val)} / day</span>
             </div>
