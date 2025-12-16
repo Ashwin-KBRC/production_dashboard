@@ -343,7 +343,24 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     return p
 
 def list_saved_dates() -> List[str]:
-    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") if "access_logs" not in p.name and p.parent != FORECAST_DIR], reverse=True)
+    """List all saved dates, filtering only valid YYYY-MM-DD format files"""
+    valid_dates = []
+    for p in DATA_DIR.glob("*.csv"):
+        if "access_logs" in p.name or p.parent == FORECAST_DIR:
+            continue
+        
+        # Extract date from filename
+        date_str = p.name.replace(".csv", "")
+        
+        # Validate YYYY-MM-DD format
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+            valid_dates.append(date_str)
+        except ValueError:
+            # Skip files that don't match the date format
+            continue
+    
+    return sorted(valid_dates, reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -1057,9 +1074,65 @@ elif mode == "Data Management":
 elif mode == "Historical Archives":
     st.title("Historical Data")
     files = list_saved_dates()
-    if not files: st.stop()
-    if "hist_d" not in st.session_state: st.session_state.hist_d = datetime.strptime(files[0], "%Y-%m-%d").date()
-    sel_d = st.date_input("Select Date", value=st.session_state.hist_d)
+    
+    if not files: 
+        st.info("No historical records found.")
+        st.stop()
+    
+    # Initialize session state with proper error handling
+    if "hist_d" not in st.session_state:
+        try:
+            # Try to parse the first valid date
+            st.session_state.hist_d = datetime.strptime(files[0], "%Y-%m-%d").date()
+        except (ValueError, IndexError):
+            # If parsing fails, use today's date
+            st.session_state.hist_d = datetime.today().date()
+    
+    # Create a dropdown with formatted dates for better UX
+    formatted_dates = []
+    for f in files:
+        try:
+            dt = datetime.strptime(f, "%Y-%m-%d")
+            formatted_dates.append((dt, f"{dt.strftime('%B %d, %Y')} ({f})"))
+        except ValueError:
+            continue
+    
+    if not formatted_dates:
+        st.error("No valid date files found.")
+        st.stop()
+    
+    # Sort by date descending
+    formatted_dates.sort(key=lambda x: x[0], reverse=True)
+    
+    # Create dropdown options
+    date_options = [fd[1] for fd in formatted_dates]
+    date_values = [fd[0].date() for fd in formatted_dates]
+    
+    # Find current selection index
+    current_index = 0
+    for i, (dt, _) in enumerate(formatted_dates):
+        if dt.date() == st.session_state.hist_d:
+            current_index = i
+            break
+    
+    # Date selection with dropdown
+    selected_option = st.selectbox(
+        "Select Date", 
+        options=date_options,
+        index=current_index,
+        key="hist_date_select"
+    )
+    
+    # Find the selected date
+    sel_d = None
+    for dt, option in formatted_dates:
+        if option == selected_option:
+            sel_d = dt.date()
+            break
+    
+    if sel_d is None:
+        sel_d = formatted_dates[0][0].date()
+    
     st.session_state.hist_d = sel_d
     d_str = sel_d.strftime("%Y-%m-%d")
     
