@@ -208,6 +208,7 @@ def save_forecast_entry(year: int, month: str, target: float):
     p = FORECAST_DIR / fname
     
     # Create a simple DataFrame with the target value
+    # Ensure the target is saved as a float
     data = pd.DataFrame([{"Target": float(target)}])
     data.to_csv(p, index=False)
 
@@ -230,8 +231,7 @@ def get_forecast(year: int, month: str) -> float:
             # Handle file read errors gracefully
             pass 
     
-    # Return a default value if file is missing or corrupted
-    # The default 40000.0 is now handled by the UI / input validation if manager hasn't set it.
+    # Return 0.0 if file is missing or corrupted
     return 0.0
 
 # AUTH
@@ -254,9 +254,10 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
 
 def list_saved_dates() -> List[str]:
     # Exclude system files and the new 'forecast' directory
-    exclude_names = {"access_logs", "monthly_targets", "forecast"} 
-    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") 
-                   if p.stem not in exclude_names], reverse=True)
+    # Only list files that look like YYYY-MM-DD.csv
+    date_files = [p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") 
+                  if len(p.stem) == 10 and p.stem[4] == '-' and p.stem[7] == '-']
+    return sorted(date_files, reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -276,6 +277,8 @@ def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
     # Fill NaN values in Accumulative Production by propagating non-NaN values within each plant group
     df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
+    # If any remaining NaNs in 'Accumulative Production', fill with 0, although ffill/bfill should cover most cases
+    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(0.0)
     return df2
 
 def generate_excel_report(df: pd.DataFrame, date_str: str):
@@ -372,17 +375,25 @@ if user == "manager":
     st.sidebar.markdown("### 🎯 Monthly Targets")
     with st.sidebar.expander("Set Forecast Target", expanded=False):
         
-        f_year = st.selectbox("Year", [datetime.now().year, datetime.now().year + 1], key="f_year")
+        current_date = get_kuwait_time().date()
+        
+        f_year = st.selectbox("Year", [current_date.year, current_date.year + 1], key="f_year")
         f_month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-        f_month = st.selectbox("Month", f_month_names, index=datetime.now().month - 1, key="f_month")
+        
+        # Default to the current month index
+        default_month_index = current_date.month - 1
+        f_month = st.selectbox("Month", f_month_names, index=default_month_index, key="f_month")
         
         # Check current value to pre-fill the input
         current_target = get_forecast(f_year, f_month)
         
+        # Set default input value: current target if > 0, otherwise 40000.0
+        target_input_value = current_target if current_target > 0 else 40000.0
+        
         target_input = st.number_input(
             f"Target Volume for {f_month} {f_year} (m³)",
             min_value=0.0,
-            value=current_target if current_target > 0 else 40000.0, # Default to 40k if current is 0
+            value=target_input_value,
             step=100.0,
             format="%.0f",
             key="target_input"
@@ -393,7 +404,9 @@ if user == "manager":
                 if target_input < 0:
                     st.sidebar.error("Target must be a positive value.")
                 else:
+                    # Save the current value of target_input, not the session state key
                     save_forecast_entry(f_year, f_month, target_input)
+                    st.session_state.target_input = target_input # Update state for immediate display fix
                     st.sidebar.success(f"Forecast of {target_input:,.0f} m³ saved for {f_month} {f_year}.")
                     log_event(user, f"Set forecast target for {f_month} {f_year} to {target_input:,.0f} m³")
             except Exception as e:
@@ -426,61 +439,91 @@ if st.sidebar.button("Logout"):
 if mode == "Analytics":
     st.title("Executive Analytics")
     
-    saved = list_saved_dates()
-    if len(saved) < 2:
-        st.warning("Insufficient data. Please upload at least 2 days of production records.")
+    saved_dates_str = list_saved_dates()
+    
+    if not saved_dates_str:
+        st.warning("No historical data found. Please upload data first.")
         st.stop()
     
     # --- DATE CONTROLS ---
+    
+    # Safely convert saved date strings to date objects
+    saved_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in saved_dates_str]
+    min_date = min(saved_dates)
+    max_date = max(saved_dates)
+
+    # Initialize session state for date pickers
+    if "start_d" not in st.session_state:
+        # Default to 30 days ago or the min date, whichever is newer
+        default_start = max(min_date, max_date - timedelta(days=30))
+        st.session_state.start_d = default_start
+    if "end_d" not in st.session_state: 
+        st.session_state.end_d = max_date
+
     c1, c2 = st.columns(2)
-    try:
-        min_date = datetime.strptime(saved[-1], "%Y-%m-%d").date()
-        max_date = datetime.strptime(saved[0], "%Y-%m-%d").date()
-    except:
-        min_date = datetime.today().date()
-        max_date = datetime.today().date()
-
-    if "start_d" not in st.session_state: st.session_state.start_d = max(min_date, max_date - timedelta(days=30))
-    if "end_d" not in st.session_state: st.session_state.end_d = max_date
-
     with c1: 
-        start_d = st.date_input("Start Date", value=st.session_state.start_d, min_value=min_date, max_value=max_date)
+        # Update session state via key, ensure value is a date object
+        start_d = st.date_input("Start Date", value=st.session_state.start_d, min_value=min_date, max_value=max_date, key="start_d_input")
         st.session_state.start_d = start_d
     with c2: 
-        end_d = st.date_input("End Date", value=st.session_state.end_d, min_value=min_date, max_value=max_date)
+        end_d = st.date_input("End Date", value=st.session_state.end_d, min_value=min_date, max_value=max_date, key="end_d_input")
         st.session_state.end_d = end_d
+        
+    # Validation
+    if st.session_state.start_d > st.session_state.end_d:
+        st.error("Error: Start Date cannot be after End Date.")
+        st.stop()
+        
+    start_d = st.session_state.start_d
+    end_d = st.session_state.end_d
 
     # --- DATA ENGINE ---
     frames = []
-    for d in saved:
-        try:
-            df = load_saved(d)
-            df['Date'] = pd.to_datetime(df['Date'])
-            df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
-            frames.append(df)
-        except: continue
+    
+    # Load all data files that fall within the selected date range
+    for d_str in saved_dates_str:
+        d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+        if start_d <= d_obj <= end_d:
+            try:
+                df = load_saved(d_str)
+                df['Date'] = pd.to_datetime(d_obj) # Assign date as datetime object
+                df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
+                frames.append(df)
+            except Exception as e: 
+                # Log load errors but continue processing other files
+                print(f"Error loading data for {d_str}: {e}")
+                continue
         
-    if not frames: st.stop()
+    if not frames: 
+        st.info("No data available within the selected date range.")
+        st.stop()
+    
     full_df = pd.concat(frames, ignore_index=True)
+    full_df = full_df.sort_values('Date')
     
-    mask = (full_df['Date'] >= pd.to_datetime(start_d)) & (full_df['Date'] <= pd.to_datetime(end_d))
-    df_filtered = full_df[mask].copy().sort_values('Date')
-    
-    if df_filtered.empty: st.info("No data in range."); st.stop()
-    
-    df_filtered = safe_numeric(df_filtered)
+    # --- FINAL CLEANUP AND METRICS ---
+    df_filtered = safe_numeric(full_df)
+    # Deduplicate rows by taking the last entry for a given day and plant
     df_filtered = df_filtered.drop_duplicates(subset=['Date', 'Plant'], keep='last')
 
+    # If, after cleaning, the DataFrame is empty, stop.
+    if df_filtered.empty: 
+        st.info("Data for the selected range is empty after processing.")
+        st.stop()
+    
     # --- METRICS CALCULATIONS ---
     total_vol = df_filtered['Production for the Day'].sum()
-    avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
+    daily_production_df = df_filtered.groupby('Date')['Production for the Day'].sum()
+    avg_daily = daily_production_df.mean()
     
     # Forecast Logic: Gets target for the month containing the start date
+    # Use the month of the start date for comparison
     forecast_month = start_d.strftime("%B")
     forecast_year = start_d.year
-    # If no target is set, default to 40,000 for display purposes on the dashboard
     monthly_target_val = get_forecast(forecast_year, forecast_month) 
-    if monthly_target_val == 0:
+    
+    # If target is not set, use a fallback value (40,000 m³)
+    if monthly_target_val == 0.0:
         monthly_target_val = 40000.0 # Default fallback for display if file is missing
     
     # Calculate Variance
@@ -489,7 +532,7 @@ if mode == "Analytics":
     var_symbol = "+" if variance >= 0 else ""
     
     # Calculate days in the current month (or selected month for start_d)
-    # Using 30 days as a safe approximation or for simplicity as implied in user request
+    # Simple approximation of 30 days for Expected Daily calculation
     days_in_month = 30
     
     # Expected Average (Target / 30 days)
@@ -567,10 +610,10 @@ if mode == "Analytics":
 
     st.markdown("---")
 
-    # --- PRODUCTION VS EXPECTED GRAPH (BRAND NEW) ---
+    # --- PRODUCTION VS EXPECTED GRAPH ---
     st.subheader(f"📈 Production vs. Expected Target ({start_d.strftime('%b %d')} - {end_d.strftime('%b %d')})")
     
-    daily_sums = df_filtered.groupby("Date")["Production for the Day"].sum().reset_index()
+    daily_sums = daily_production_df.reset_index()
     daily_sums['Target'] = expected_daily_avg
     
     fig_target = go.Figure()
@@ -603,7 +646,7 @@ if mode == "Analytics":
     with t_week:
         # Helper to convert Week Num to Date Range (e.g. Dec 1 - Dec 7)
         # We group by Week Start Date
-        df_filtered['Week_Start'] = df_filtered['Date'].apply(lambda x: x - timedelta(days=x.weekday()))
+        df_filtered['Week_Start'] = df_filtered['Date'].apply(lambda x: x.date() - timedelta(days=x.date().weekday()))
         
         wk_agg = df_filtered.groupby(['Plant', 'Week_Start']).agg({
             'Production for the Day': ['sum', 'mean'],
@@ -667,7 +710,8 @@ elif mode == "Upload New Data":
     c1, c2 = st.columns([2, 1])
     with c1: uploaded = st.file_uploader("Upload Excel File (Daily Data)", type=["xlsx"])
     with c2:
-        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today()
+        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today().date()
+        # Ensure selected date is a date object
         sel_date = st.date_input("Production Date", value=st.session_state.up_date)
         st.session_state.up_date = sel_date
         
@@ -718,10 +762,13 @@ elif mode == "Data Management":
 elif mode == "Historical Archives":
     st.title("Historical Data Viewer")
     files = list_saved_dates()
-    if not files: st.stop()
+    if not files: st.info("No records."); st.stop()
     
-    if "hist_d" not in st.session_state: st.session_state.hist_d = datetime.strptime(files[0], "%Y-%m-%d").date()
-    sel_d = st.date_input("Select Date", value=st.session_state.hist_d)
+    # Safely get the max date as default value
+    max_d_obj = datetime.strptime(files[0], "%Y-%m-%d").date()
+    if "hist_d" not in st.session_state: st.session_state.hist_d = max_d_obj
+    
+    sel_d = st.date_input("Select Date", value=st.session_state.hist_d, max_value=max_d_obj)
     st.session_state.hist_d = sel_d
     d_str = sel_d.strftime("%Y-%m-%d")
     
@@ -789,7 +836,7 @@ elif mode == "Audit Logs":
     if user != "manager": st.error("Access Restricted"); st.stop()
     st.title("Security Audit Logs")
     
-    log_date = st.date_input("Filter by Date", value=datetime.today())
+    log_date = st.date_input("Filter by Date", value=datetime.today().date())
     logs = get_logs()
     
     if not logs.empty:
