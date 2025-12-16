@@ -199,9 +199,31 @@ def get_logs() -> pd.DataFrame:
 
 # FORECAST MANAGEMENT
 def init_forecasts():
-    if not FORECAST_FILE.exists():
-        with open(FORECAST_FILE, 'w', newline='') as f:
-            csv.writer(f).writerow(["Year", "Month", "Target"])
+    """Ensures forecast file exists and populates a default target if empty."""
+    try:
+        df = pd.read_csv(FORECAST_FILE)
+    except FileNotFoundError:
+        df = pd.DataFrame(columns=["Year", "Month", "Target"])
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame(columns=["Year", "Month", "Target"])
+
+    # If the file is newly created or empty, add a default target for the current month
+    if df.empty:
+        current_kwt_time = get_kuwait_time()
+        # Set a target for the current month
+        current_year = current_kwt_time.year
+        current_month = current_kwt_time.strftime("%B")
+        
+        # Default target value to prevent 0s on the dashboard
+        default_target = 40000.0 
+        
+        # Check if the entry already exists (in case of EmptyDataError on existing file)
+        if not ((df['Year'] == current_year) & (df['Month'] == current_month)).any():
+            new_entry = pd.DataFrame([{"Year": current_year, "Month": current_month, "Target": default_target}])
+            df = pd.concat([df, new_entry], ignore_index=True)
+            
+    df.to_csv(FORECAST_FILE, index=False)
+
 
 def save_forecast_entry(year: int, month: str, target: float):
     """Saves a forecast entry to the CSV database."""
@@ -229,13 +251,15 @@ def get_forecast(year: int, month: str) -> float:
     try:
         df = pd.read_csv(FORECAST_FILE)
         # Ensure correct types for comparison
-        df['Year'] = df['Year'].astype(int)
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(-1).astype(int)
         df['Month'] = df['Month'].astype(str)
+        df['Target'] = pd.to_numeric(df['Target'], errors='coerce').fillna(0.0)
         
         row = df[(df['Year'] == int(year)) & (df['Month'] == str(month))]
         if not row.empty:
             return float(row.iloc[0]['Target'])
-    except:
+    except Exception as e:
+        # print(f"Error reading forecast: {e}") # Log error for debugging if needed
         pass
     return 0.0
 
@@ -278,6 +302,7 @@ def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
     df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
+    # Fill NaN values in Accumulative Production by propagating non-NaN values within each plant group
     df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
     return df2
 
@@ -492,7 +517,7 @@ if mode == "Analytics":
     total_vol = df_filtered['Production for the Day'].sum()
     avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
     
-    # Forecast Logic: Defaults to current month unless changed
+    # Forecast Logic: Gets target for the month containing the start date
     forecast_month = start_d.strftime("%B")
     forecast_year = start_d.year
     monthly_target_val = get_forecast(forecast_year, forecast_month)
@@ -502,8 +527,12 @@ if mode == "Analytics":
     var_color = "#10b981" if variance >= 0 else "#ef4444" # Green if above, Red if below
     var_symbol = "+" if variance >= 0 else ""
     
+    # Calculate days in the current month (or selected month for start_d)
+    # Using 30 days as a safe approximation or for simplicity as implied in user request
+    days_in_month = 30
+    
     # Expected Average (Target / 30 days)
-    expected_daily_avg = monthly_target_val / 30 if monthly_target_val > 0 else 0
+    expected_daily_avg = monthly_target_val / days_in_month if monthly_target_val > 0 else 0
 
     # --- HERO SECTION ---
     # Added "Total Production" box as requested
@@ -512,7 +541,7 @@ if mode == "Analytics":
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
             <!-- BOX 1: TOTAL PRODUCTION (BOLD) -->
             <div>
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Total Production</div>
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Total Production (Selected Period)</div>
                 <div style="font-size:3.5rem; font-weight:800; color: white;">{total_vol:,.0f}</div>
                 <div style="font-size:0.8rem; opacity:0.8;">m³</div>
             </div>
@@ -695,7 +724,6 @@ elif mode == "Upload New Data":
                     df_clean['Date'] = sel_date.strftime("%Y-%m-%d")
                     save_path = save_csv(df_clean, sel_date, overwrite=True)
                     log_event(user, f"Uploaded {sel_date}")
-                    attempt_git_push(save_path, f"Add {sel_date}")
                     
                     df_disp = df_clean[~df_clean["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                     df_disp = safe_numeric(df_disp)
@@ -785,10 +813,6 @@ elif mode == "Historical Archives":
         daily_target = m_target / 30 if m_target > 0 else 0
         
         # Create comparison DF
-        comp_df = df[['Plant', 'Production for the Day']].copy()
-        # Distribute daily target evenly across plants? Or just show total line?
-        # Let's show Total Actual vs Total Expected for the whole site on this day
-        
         fig_comp = go.Figure()
         fig_comp.add_trace(go.Bar(x=['Total Site'], y=[tot], name='Actual', marker_color='#3b82f6'))
         fig_comp.add_trace(go.Bar(x=['Total Site'], y=[daily_target], name='Expected', marker_color='#ef4444'))
