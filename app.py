@@ -13,6 +13,8 @@ import plotly.graph_objects as go
 import streamlit as st
 import io
 import xlsxwriter
+import calendar
+from dateutil.relativedelta import relativedelta
 
 # ========================================
 # 1. PAGE CONFIGURATION
@@ -94,6 +96,17 @@ def inject_css():
             border-color: #3b82f6;
         }}
         
+        /* NEW TOTAL PRODUCTION BIG BOX */
+        .total-production-box {{
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }}
+        
         /* HERO BANNER GRADIENT */
         .hero-banner {{
             background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
@@ -158,6 +171,16 @@ def inject_css():
         .lb-rank {{ font-size: 1.1em; font-weight: 700; opacity: 0.8; }}
         .lb-name {{ font-weight: 600; font-size: 1.05em; margin-left: 10px; }}
         .lb-val {{ font-weight: 800; font-size: 1.1em; }}
+        
+        /* FORECAST UPLOAD BOX */
+        .forecast-upload-box {{
+            background-color: {card_bg};
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px dashed {border_color};
+            margin-bottom: 20px;
+            text-align: center;
+        }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -169,7 +192,8 @@ inject_css()
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
-FORECAST_FILE = DATA_DIR / "monthly_targets.csv" # NEW: File to store forecasts
+FORECAST_DIR = DATA_DIR / "forecasts"
+FORECAST_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
 # CONFIGURATION SECRETS
@@ -229,37 +253,77 @@ def get_logs() -> pd.DataFrame:
     try: return pd.read_csv(LOG_FILE)
     except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
-# --- FORECAST FUNCTIONS (NEW) ---
-def init_forecasts():
-    if not FORECAST_FILE.exists():
-        with open(FORECAST_FILE, 'w', newline='') as f:
-            csv.writer(f).writerow(["Year", "Month", "Target"])
+# --- FORECAST FUNCTIONS (UPDATED) ---
+def get_forecast_file_path(year: int, month: int) -> Path:
+    """Get the forecast file path for a specific month and year"""
+    return FORECAST_DIR / f"forecast-{month:02d}-{year}.xlsx"
 
-def save_forecast(year: int, month: str, target: float):
-    init_forecasts()
-    # Read existing
+def save_forecast_from_excel(year: int, month: int, excel_file) -> Tuple[bool, str]:
+    """Save forecast from uploaded Excel file"""
     try:
-        df = pd.read_csv(FORECAST_FILE)
-    except:
-        df = pd.DataFrame(columns=["Year", "Month", "Target"])
+        df = pd.read_excel(excel_file)
+        # Check required columns
+        if 'forecast' not in df.columns:
+            return False, "Excel file must contain 'forecast' column"
+        
+        # Save to Excel file
+        file_path = get_forecast_file_path(year, month)
+        df.to_excel(file_path, index=False)
+        return True, f"Forecast saved for {calendar.month_name[month]} {year}"
+    except Exception as e:
+        return False, f"Error processing file: {str(e)}"
+
+def get_forecast(year: int, month: int) -> float:
+    """Get forecast value for specific month and year"""
+    file_path = get_forecast_file_path(year, month)
+    if not file_path.exists():
+        return 0.0
     
-    # Update or Append
-    # Remove old entry for this Y/M if exists
-    df = df[~((df['Year'] == year) & (df['Month'] == month))]
-    # Add new
-    new_row = pd.DataFrame([{"Year": year, "Month": month, "Target": target}])
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv(FORECAST_FILE, index=False)
-
-def get_forecast(year: int, month: str) -> float:
-    init_forecasts()
     try:
-        df = pd.read_csv(FORECAST_FILE)
-        row = df[(df['Year'] == year) & (df['Month'] == month)]
-        if not row.empty:
-            return float(row.iloc[0]['Target'])
-    except:
-        pass
+        df = pd.read_excel(file_path)
+        if 'forecast' in df.columns and not df.empty:
+            return float(df['forecast'].iloc[0])
+    except Exception as e:
+        print(f"Error reading forecast: {e}")
+    return 0.0
+
+def get_current_month_forecast() -> float:
+    """Get forecast for current month"""
+    now = get_kuwait_time()
+    return get_forecast(now.year, now.month)
+
+def list_available_forecasts() -> List[Tuple[int, int]]:
+    """List all available forecasts"""
+    forecasts = []
+    for file_path in FORECAST_DIR.glob("forecast-*.xlsx"):
+        try:
+            parts = file_path.stem.split('-')
+            if len(parts) == 3:
+                month = int(parts[1])
+                year = int(parts[2])
+                forecasts.append((year, month))
+        except:
+            continue
+    return sorted(forecasts, reverse=True)
+
+def get_forecast_for_date_range(start_date: date, end_date: date) -> Dict[str, float]:
+    """Get forecast values for a date range"""
+    forecasts = {}
+    current = start_date.replace(day=1)
+    
+    while current <= end_date:
+        forecast_val = get_forecast(current.year, current.month)
+        month_key = f"{current.year}-{current.month:02d}"
+        forecasts[month_key] = forecast_val
+        current += relativedelta(months=1)
+    
+    return forecasts
+
+def calculate_daily_target(monthly_forecast: float, year: int, month: int) -> float:
+    """Calculate daily target based on monthly forecast"""
+    days_in_month = calendar.monthrange(year, month)[1]
+    if days_in_month > 0:
+        return monthly_forecast / days_in_month
     return 0.0
 
 def check_credentials(username: str, password: str) -> bool:
@@ -279,7 +343,7 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     return p
 
 def list_saved_dates() -> List[str]:
-    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") if "access_logs" not in p.name and "monthly_targets" not in p.name], reverse=True)
+    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") if "access_logs" not in p.name and p.parent != FORECAST_DIR], reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -356,6 +420,14 @@ def get_theme_colors(theme_name):
     }
     return themes.get(theme_name, themes["Neon Cyber"])
 
+def get_week_range(date_obj):
+    """Get week range string (Dec 1 - Dec 7 format)"""
+    start_of_week = date_obj - timedelta(days=date_obj.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    start_str = start_of_week.strftime('%b %d')
+    end_str = end_of_week.strftime('%b %d')
+    return f"{start_str} - {end_str}"
+
 def apply_chart_theme(fig, x_axis_title="Date Range"):
     """
     Applies the professional layout to charts.
@@ -374,7 +446,6 @@ def apply_chart_theme(fig, x_axis_title="Date Range"):
         margin=dict(t=30, b=10, l=10, r=10),
         xaxis=dict(showgrid=False, linecolor=grid_col, tickfont=dict(color=text_col), title=x_axis_title),
         yaxis=dict(showgrid=True, gridcolor=grid_col, linecolor=grid_col, tickfont=dict(color=text_col), 
-                   # Ensure exact values for Y-axis (Production/Volume)
                    tickformat=',.3f', title="Production Volume (m³)"), 
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color=text_col)),
         hovermode="x unified"
@@ -385,6 +456,44 @@ def apply_chart_theme(fig, x_axis_title="Date Range"):
     fig.update_traces(
         hovertemplate="<b>%{x}</b><br>Value: %{y:,.3f} m³<br>Plant: %{text}<extra></extra>" if 'text' in fig.data[0] else None
     )
+    return fig
+
+def create_forecast_vs_actual_chart(daily_data, forecast_data, title="Actual vs Expected Production"):
+    """
+    Create a line chart comparing actual production vs expected production
+    """
+    fig = go.Figure()
+    
+    # Add actual production line (Blue)
+    fig.add_trace(go.Scatter(
+        x=daily_data['Date'],
+        y=daily_data['Total Production'],
+        mode='lines+markers',
+        name='Actual Production',
+        line=dict(color='#3b82f6', width=3),
+        marker=dict(size=8, color='#3b82f6'),
+        hovertemplate='<b>%{x|%b %d, %Y}</b><br>Actual: %{y:,.3f} m³<extra></extra>'
+    ))
+    
+    # Add expected production line (Red)
+    fig.add_trace(go.Scatter(
+        x=daily_data['Date'],
+        y=forecast_data['Expected Production'],
+        mode='lines+markers',
+        name='Expected Production',
+        line=dict(color='#ef4444', width=3, dash='dash'),
+        marker=dict(size=6, color='#ef4444'),
+        hovertemplate='<b>%{x|%b %d, %Y}</b><br>Expected: %{y:,.3f} m³<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title="Date",
+        yaxis_title="Production Volume (m³)",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
     return fig
 
 # ========================================
@@ -434,16 +543,68 @@ mode = st.sidebar.radio("Navigation", menu)
 
 st.sidebar.markdown("---")
 
-# --- MANAGER ONLY: FORECAST SETTING ---
+# --- FORECAST DISPLAY (ALL USERS) ---
+current_time = get_kuwait_time()
+current_month_forecast = get_forecast(current_time.year, current_time.month)
+current_month_name = calendar.month_name[current_time.month]
+
+if current_month_forecast > 0:
+    st.sidebar.markdown(f"""
+    <div class="forecast-upload-box">
+        <div style="font-size:0.9rem; color:#64748b; margin-bottom:5px;">📊 Current Month Forecast</div>
+        <div style="font-size:1.8rem; font-weight:800; color:#3b82f6;">{format_m3(current_month_forecast)}</div>
+        <div style="font-size:0.9rem; color:#64748b; margin-top:5px;">{current_month_name} {current_time.year}</div>
+        <div style="font-size:0.8rem; color:#10b981; font-weight:600; margin-top:8px;">
+            Expected Average: {format_m3(calculate_daily_target(current_month_forecast, current_time.year, current_time.month))}/day
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- MANAGER ONLY: FORECAST UPLOAD ---
 if user == "manager":
-    with st.sidebar.expander("🎯 Manager Forecast Controls"):
-        f_year = st.selectbox("Forecast Year", [datetime.now().year, datetime.now().year + 1])
-        f_month = st.selectbox("Forecast Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
-        f_target = st.number_input("Monthly Target (m³)", min_value=0.0, step=100.0)
-        if st.button("Save Forecast"):
-            save_forecast(f_year, f_month, f_target)
-            st.success(f"Target saved for {f_month} {f_year}")
-            st.rerun()
+    with st.sidebar.expander("🎯 Manager Forecast Controls", expanded=False):
+        st.markdown("### Upload Monthly Forecast")
+        
+        # Year and month selection
+        current_year = current_time.year
+        f_year = st.selectbox("Forecast Year", 
+                             [current_year - 1, current_year, current_year + 1],
+                             index=1)
+        
+        f_month = st.selectbox("Forecast Month", 
+                              list(calendar.month_name)[1:],  # Skip empty first element
+                              index=current_time.month - 1)
+        
+        month_num = list(calendar.month_name).index(f_month)
+        
+        # File upload
+        uploaded_file = st.file_uploader("Upload Forecast Excel", 
+                                        type=["xlsx"],
+                                        key="forecast_uploader",
+                                        help="Upload Excel file with 'forecast' column containing the monthly target value")
+        
+        if uploaded_file is not None:
+            # Validate file name
+            expected_name = f"forecast-{month_num:02d}-{f_year}.xlsx"
+            if uploaded_file.name != expected_name:
+                st.warning(f"Please rename file to: {expected_name}")
+            else:
+                # Save forecast
+                success, message = save_forecast_from_excel(f_year, month_num, uploaded_file)
+                if success:
+                    st.success(message)
+                    st.rerun()
+                else:
+                    st.error(message)
+        
+        # Show existing forecasts
+        available_forecasts = list_available_forecasts()
+        if available_forecasts:
+            st.markdown("---")
+            st.markdown("### Existing Forecasts")
+            for year, month in available_forecasts[:5]:  # Show last 5
+                forecast_val = get_forecast(year, month)
+                st.markdown(f"**{calendar.month_name[month]} {year}:** {format_m3(forecast_val)}")
 
 st.sidebar.markdown("---")
 
@@ -509,50 +670,99 @@ if mode == "Analytics":
     df_filtered = safe_numeric(df_filtered)
     # Deduplicate to prevent math errors
     df_filtered = df_filtered.drop_duplicates(subset=['Date', 'Plant'], keep='last')
+    
+    # Calculate total production for the BIG BOX
+    total_production = df_filtered['Production for the Day'].sum()
+    
+    # --- BIG TOTAL PRODUCTION BOX ---
+    st.markdown(f"""
+    <div class="total-production-box">
+        <div style="font-size:1.2rem; opacity:0.9; margin-bottom:10px;">📊 TOTAL PRODUCTION</div>
+        <div style="font-size:4rem; font-weight:900; margin:20px 0;">{format_m3(total_production)}</div>
+        <div style="font-size:1rem; opacity:0.8;">
+            Date Range: {start_d.strftime('%b %d, %Y')} to {end_d.strftime('%b %d, %Y')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # --- FORECAST CALCULATION ---
+    # Get forecasts for the selected date range
+    forecasts = get_forecast_for_date_range(start_d, end_d)
+    
+    # Calculate expected production for each day based on monthly forecasts
+    daily_expected = []
+    current_date = start_d
+    
+    while current_date <= end_d:
+        monthly_forecast = get_forecast(current_date.year, current_date.month)
+        days_in_month = calendar.monthrange(current_date.year, current_date.month)[1]
+        daily_target = monthly_forecast / days_in_month if days_in_month > 0 else 0
+        
+        daily_expected.append({
+            'Date': pd.Timestamp(current_date),
+            'Expected Production': daily_target
+        })
+        current_date += timedelta(days=1)
+    
+    daily_expected_df = pd.DataFrame(daily_expected)
+    
+    # Calculate actual daily totals
+    daily_actual_df = df_filtered.groupby('Date')['Production for the Day'].sum().reset_index()
+    daily_actual_df.columns = ['Date', 'Total Production']
+    
+    # Merge actual and expected
+    daily_comparison = pd.merge(daily_actual_df, daily_expected_df, on='Date', how='left')
+    daily_comparison['Expected Production'] = daily_comparison['Expected Production'].fillna(0)
+    
     # --- TOP 3 LEADERBOARD CALCULATION ---
     # Top 3 by Sum
     top_sum = df_filtered.groupby("Plant")["Production for the Day"].sum().sort_values(ascending=False).head(3)
     # Top 3 by Average
     top_avg = df_filtered.groupby("Plant")["Production for the Day"].mean().sort_values(ascending=False).head(3)
 
-    # --- FORECAST LOGIC (New Feature) ---
-    # Determine the "Dominant" month in selection to pick which forecast to show
-    dom_month_idx = df_filtered['Date'].dt.month.mode()[0]
-    dom_year_idx = df_filtered['Date'].dt.year.mode()[0]
-    month_name = date(1900, dom_month_idx, 1).strftime('%B')
-    
-    monthly_target = get_forecast(dom_year_idx, month_name)
-    total_vol = df_filtered['Production for the Day'].sum()
-    avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
-    
-    # Calculate Variance
-    variance = total_vol - monthly_target
-    var_color = "#10b981" if variance >= 0 else "#ef4444"
-    var_icon = "▲" if variance >= 0 else "▼"
-    
-    # ------------------ HERO SECTION ------------------
-    st.markdown(f"""
-    <div class="hero-banner">
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
-            <div>
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Daily Average</div>
-                <div style="font-size:3rem; font-weight:800;">{avg_daily:,.0f} m³</div>
-            </div>
-            <div style="border-left:1px solid rgba(255,255,255,0.2); border-right:1px solid rgba(255,255,255,0.2);">
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({month_name})</div>
-                <div style="font-size:3rem; font-weight:800;">{monthly_target:,.0f} m³</div>
-            </div>
-            <div>
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast Variance</div>
-                <div style="font-size:3rem; font-weight:800; color:{var_color};">{var_icon} {abs(variance):,.0f} m³</div>
-                <div style="font-size:0.8rem; opacity:0.8;">Actual: {total_vol:,.0f} m³</div>
+    # --- FORECAST HERO SECTION ---
+    # Determine the "Dominant" month in selection
+    if not daily_comparison.empty:
+        dom_month_idx = daily_comparison['Date'].dt.month.mode()[0]
+        dom_year_idx = daily_comparison['Date'].dt.year.mode()[0]
+        month_name = calendar.month_name[dom_month_idx]
+        
+        monthly_target = get_forecast(dom_year_idx, dom_month_idx)
+        total_vol = daily_comparison['Total Production'].sum()
+        avg_daily = daily_comparison['Total Production'].mean()
+        expected_avg = daily_comparison['Expected Production'].mean()
+        
+        # Calculate Variance
+        variance = total_vol - monthly_target
+        var_color = "#10b981" if variance >= 0 else "#ef4444"
+        var_icon = "▲" if variance >= 0 else "▼"
+        
+        # ------------------ HERO SECTION ------------------
+        st.markdown(f"""
+        <div class="hero-banner">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
+                <div>
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Daily Average</div>
+                    <div style="font-size:3rem; font-weight:800;">{avg_daily:,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8;">Actual Production</div>
+                </div>
+                <div style="border-left:1px solid rgba(255,255,255,0.2); border-right:1px solid rgba(255,255,255,0.2);">
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({month_name})</div>
+                    <div style="font-size:3rem; font-weight:800;">{monthly_target:,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8; font-weight:600; color:#fbbf24;">
+                        Expected Average: {format_m3(expected_avg)}/day
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast Variance</div>
+                    <div style="font-size:3rem; font-weight:800; color:{var_color};">{var_icon} {abs(variance):,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8;">Actual: {total_vol:,.0f} m³</div>
+                </div>
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # ------------------ LEADERBOARDS (New Feature) ------------------
+    # ------------------ LEADERBOARDS ------------------
     st.markdown("### 🏆 Top Performance Leaders")
     col_l1, col_l2 = st.columns(2)
     
@@ -586,6 +796,12 @@ if mode == "Analytics":
 
     st.markdown("---")
 
+    # ------------------ ACTUAL VS EXPECTED CHART ------------------
+    st.markdown("### 📈 Actual vs Expected Production")
+    if not daily_comparison.empty:
+        fig_comparison = create_forecast_vs_actual_chart(daily_comparison, daily_comparison)
+        st.plotly_chart(apply_chart_theme(fig_comparison), use_container_width=True)
+
     # TABS FOR WEEKLY / MONTHLY SPLIT
     tab_week, tab_month = st.tabs(["📅 Weekly Performance", "📆 Monthly Performance"])
 
@@ -599,54 +815,110 @@ if mode == "Analytics":
         }).reset_index()
         week_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
         
-        # Format Date Label
-        week_agg['Week Label'] = week_agg['Date'].dt.strftime('Wk %W (%d %b)')
-        week_agg['FullRange'] = week_agg['Date'].apply(lambda x: f"Week ending {x.strftime('%Y-%m-%d')}")
+        # Format Date Label with Week Range (Dec 1 - Dec 7 format)
+        week_agg['Week Range'] = week_agg['Date'].apply(lambda x: get_week_range(x))
+        week_agg['Week Label'] = week_agg['Week Range']
         
         # Post-Aggregation Filter (Double Check)
         week_agg = week_agg[(week_agg['Date'] >= pd.to_datetime(start_d)) & (week_agg['Date'] <= pd.to_datetime(end_d))]
 
-        c_w1, c_w2 = st.columns(2)
-        with c_w1:
-            fig = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
+        # NEW: Additional charts for Production of the Day
+        st.markdown("#### 📊 Weekly Production Analysis")
+        
+        # Create 4 charts in a 2x2 grid
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Chart 1: Weekly Total Production (Sum)
+            fig1 = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
                          title="Weekly Total Production (Sum)", barmode='group',
-                         text='Plant', # For tooltip identification
+                         text='Plant',
                          color_discrete_sequence=current_theme_colors)
-            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            fig1.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig1), use_container_width=True)
             
-        with c_w2:
-            fig = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
+            # NEW Chart 3: Weekly Production Trend (Line)
+            fig3 = px.line(week_agg, x='Week Label', y='Total Production', color='Plant', markers=True,
+                          title="Weekly Production Trend",
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+            fig3.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig3), use_container_width=True)
+            
+        with col2:
+            # Chart 2: Weekly Average Production (Mean)
+            fig2 = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
                          title="Weekly Average Production (Mean)", barmode='group',
                          text='Plant',
                          color_discrete_sequence=current_theme_colors)
-            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            fig2.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Average: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig2), use_container_width=True)
             
-        st.markdown("#### Weekly Accumulative Trend")
-        fig_acc = px.line(week_agg, x='Week Label', y='Accumulative', color='Plant', markers=True,
+            # NEW Chart 4: Weekly Production Distribution (Area)
+            fig4 = px.area(week_agg, x='Week Label', y='Total Production', color='Plant',
+                          title="Weekly Production Distribution",
                           text='Plant',
                           color_discrete_sequence=current_theme_colors)
+            fig4.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig4), use_container_width=True)
+        
+        # Weekly Accumulative Trend
+        st.markdown("#### 📈 Weekly Accumulative Trend")
+        fig_acc = px.line(week_agg, x='Week Label', y='Accumulative', color='Plant', markers=True,
+                          title="Weekly Accumulative Production",
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+        fig_acc.update_traces(
+            hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Accumulative: %{y:,.3f} m³<extra></extra>'
+        )
         st.plotly_chart(apply_chart_theme(fig_acc), use_container_width=True)
 
     # --- MONTHLY ANALYSIS ---
     with tab_month:
         st.subheader("Monthly Analytics")
         
-        # 1. Forecast Trajectory Chart (Replaces complex graph)
-        # Calculate daily cumulative sum for the filtered period
-        daily_cum = df_filtered.groupby('Date')['Production for the Day'].sum().cumsum().reset_index()
-        daily_cum.columns = ['Date', 'Actual Cumulative']
-        
-        # Create Target Line (Linear projection for the month)
-        days_in_view = (df_filtered['Date'].max() - df_filtered['Date'].min()).days + 1
-        daily_target_rate = monthly_target / 30 # Approx daily target
-        daily_cum['Target Trend'] = [daily_target_rate * (i+1) for i in range(len(daily_cum))]
-        
-        fig_traj = go.Figure()
-        fig_traj.add_trace(go.Scatter(x=daily_cum['Date'], y=daily_cum['Actual Cumulative'], mode='lines+markers', name='Actual Production', line=dict(color='#10b981', width=4)))
-        fig_traj.add_trace(go.Scatter(x=daily_cum['Date'], y=daily_cum['Target Trend'], mode='lines', name='Target Trajectory', line=dict(color='#ef4444', dash='dot')))
-        
-        fig_traj.update_layout(title=f"Monthly Trajectory: Actual vs Forecast ({month_name})")
-        st.plotly_chart(apply_chart_theme(fig_traj), use_container_width=True)
+        # Monthly Trajectory Chart
+        st.markdown("#### 🎯 Monthly Trajectory: Actual vs Forecast")
+        if not daily_comparison.empty:
+            # Calculate monthly cumulative
+            daily_comparison['Month'] = daily_comparison['Date'].dt.strftime('%B %Y')
+            monthly_cum = daily_comparison.groupby('Month').agg({
+                'Total Production': 'sum',
+                'Expected Production': 'sum'
+            }).reset_index()
+            
+            fig_traj = go.Figure()
+            fig_traj.add_trace(go.Bar(
+                x=monthly_cum['Month'],
+                y=monthly_cum['Total Production'],
+                name='Actual Production',
+                marker_color='#3b82f6',
+                text=monthly_cum['Total Production'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            fig_traj.add_trace(go.Bar(
+                x=monthly_cum['Month'],
+                y=monthly_cum['Expected Production'],
+                name='Expected Production',
+                marker_color='#ef4444',
+                text=monthly_cum['Expected Production'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_traj.update_layout(
+                title="Monthly Actual vs Expected Production",
+                barmode='group',
+                yaxis_title="Production Volume (m³)"
+            )
+            st.plotly_chart(apply_chart_theme(fig_traj), use_container_width=True)
         
         # Standard Monthly Charts
         month_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='M')]).agg({
@@ -658,25 +930,70 @@ if mode == "Analytics":
         
         month_agg = month_agg[(month_agg['Date'] >= pd.to_datetime(start_d)) & (month_agg['Date'] <= pd.to_datetime(end_d))]
 
-        c_m1, c_m2 = st.columns(2)
-        with c_m1:
-            fig = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
-                         title="Monthly Total Production (Sum)", barmode='group',
-                         text='Plant',
-                         color_discrete_sequence=current_theme_colors)
-            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+        # NEW: Additional charts for Monthly analysis
+        st.markdown("#### 📊 Monthly Production Analysis")
+        
+        col_m1, col_m2 = st.columns(2)
+        
+        with col_m1:
+            # Chart 1: Monthly Total Production (Sum)
+            fig_m1 = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
+                           title="Monthly Total Production (Sum)", barmode='group',
+                           text='Plant',
+                           color_discrete_sequence=current_theme_colors)
+            fig_m1.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m1), use_container_width=True)
             
-        with c_m2:
-            fig = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
-                         title="Monthly Average Production (Mean)", barmode='group',
-                         text='Plant',
-                         color_discrete_sequence=current_theme_colors)
-            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
-            
-        st.markdown("#### Monthly Accumulative Trend")
-        fig_acc_m = px.line(month_agg, x='Month Label', y='Accumulative', color='Plant', markers=True,
+            # NEW Chart 3: Monthly Production Stacked Area
+            fig_m3 = px.area(month_agg, x='Month Label', y='Total Production', color='Plant',
+                            title="Monthly Production Distribution (Stacked)",
                             text='Plant',
                             color_discrete_sequence=current_theme_colors)
+            fig_m3.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m3), use_container_width=True)
+            
+        with col_m2:
+            # Chart 2: Monthly Average Production (Mean)
+            fig_m2 = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
+                           title="Monthly Average Production (Mean)", barmode='group',
+                           text='Plant',
+                           color_discrete_sequence=current_theme_colors)
+            fig_m2.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Average: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m2), use_container_width=True)
+            
+            # NEW Chart 4: Monthly Production Heatmap
+            # Create pivot table for heatmap
+            pivot_df = month_agg.pivot_table(
+                index='Plant', 
+                columns='Month Label', 
+                values='Total Production',
+                aggfunc='sum'
+            ).fillna(0)
+            
+            fig_m4 = px.imshow(
+                pivot_df,
+                labels=dict(x="Month", y="Plant", color="Production"),
+                title="Monthly Production Heatmap by Plant",
+                aspect="auto"
+            )
+            fig_m4.update_xaxes(side="top")
+            st.plotly_chart(apply_chart_theme(fig_m4), use_container_width=True)
+        
+        # Monthly Accumulative Trend
+        st.markdown("#### 📈 Monthly Accumulative Trend")
+        fig_acc_m = px.line(month_agg, x='Month Label', y='Accumulative', color='Plant', markers=True,
+                            title="Monthly Accumulative Production",
+                            text='Plant',
+                            color_discrete_sequence=current_theme_colors)
+        fig_acc_m.update_traces(
+            hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Accumulative: %{y:,.3f} m³<extra></extra>'
+        )
         st.plotly_chart(apply_chart_theme(fig_acc_m), use_container_width=True)
 
 # ========================================
@@ -752,16 +1069,24 @@ elif mode == "Historical Archives":
         df = safe_numeric(df)
         tot = df["Production for the Day"].sum()
         
+        # Get forecast for this day's month
+        month_forecast = get_forecast(sel_d.year, sel_d.month)
+        days_in_month = calendar.monthrange(sel_d.year, sel_d.month)[1]
+        expected_daily = month_forecast / days_in_month if days_in_month > 0 else 0
+        
         st.markdown(f"""
         <div style="background:{'#1e293b' if st.session_state['dark_mode'] else '#1e3a8a'}; color:white; padding:30px; border-radius:12px; margin-bottom:20px;">
             <h2 style="margin:0; color:white !important;">{sel_d.strftime('%A, %B %d, %Y')}</h2>
             <div style="font-size:3rem; font-weight:800;">{format_m3(tot)}</div>
+            <div style="font-size:1rem; margin-top:10px;">
+                Expected Daily: <span style="font-weight:600;">{format_m3(expected_daily)}</span> | 
+                Monthly Forecast: <span style="font-weight:600;">{format_m3(month_forecast)}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         st.dataframe(df, use_container_width=True)
         
-        st.markdown("### 📊 Daily Breakdown")
-        # Added New Charts as requested
+        st.markdown("### 📊 Daily Analysis")
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**Production Share**")
@@ -773,7 +1098,6 @@ elif mode == "Historical Archives":
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
         st.markdown("### 📈 Accumulative Analysis")
-        # Accumulative Charts for the specific day
         c3, c4 = st.columns(2)
         with c3:
             st.markdown("**Accumulative by Plant**")
@@ -783,6 +1107,29 @@ elif mode == "Historical Archives":
             st.markdown("**Accumulative Share**")
             fig_acc_pie = px.pie(df, names='Plant', values='Accumulative Production', color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig_acc_pie), use_container_width=True)
+        
+        # NEW: Actual vs Expected Chart for Historical View
+        st.markdown("### 🎯 Actual vs Expected Production")
+        
+        # Create comparison data
+        comparison_data = pd.DataFrame({
+            'Metric': ['Actual Production', 'Expected Production'],
+            'Value': [tot, expected_daily],
+            'Color': ['#3b82f6', '#ef4444']
+        })
+        
+        fig_comparison = px.bar(
+            comparison_data, 
+            x='Metric', 
+            y='Value', 
+            color='Metric',
+            title=f"Daily Production Comparison for {sel_d.strftime('%B %d, %Y')}",
+            color_discrete_map={'Actual Production': '#3b82f6', 'Expected Production': '#ef4444'},
+            text=comparison_data['Value'].apply(lambda x: format_m3(x))
+        )
+        fig_comparison.update_traces(textposition='outside')
+        fig_comparison.update_layout(showlegend=False)
+        st.plotly_chart(apply_chart_theme(fig_comparison), use_container_width=True)
 
 # ========================================
 # MODULE 5: AUDIT LOGS (MANAGER ONLY)
@@ -819,4 +1166,3 @@ st.sidebar.markdown("""
     <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color:#3b82f6; text-decoration:none;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
-
