@@ -25,31 +25,35 @@ st.set_page_config(
 )
 
 # ========================================
-# 2. SESSION STATE SETUP
+# 2. SESSION STATE & DARK MODE SETUP
 # ========================================
 if "dark_mode" not in st.session_state:
     st.session_state["dark_mode"] = False
-if "theme" not in st.session_state:
-    st.session_state["theme"] = "Executive Blue"
 
 # ========================================
-# 3. PROFESSIONAL STYLING (CSS)
+# 3. CSS STYLING (DYNAMIC LIGHT/DARK)
 # ========================================
 def inject_css():
+    """
+    Injects professional CSS based on the current Light/Dark mode state.
+    Handles all UI elements including Cards, Tables, Tabs, and Text.
+    """
     if st.session_state["dark_mode"]:
-        bg_color = "#0f172a"
-        text_color = "#f8fafc"
-        card_bg = "#1e293b"
-        border_color = "#334155"
-        sidebar_bg = "#111827"
-        secondary_text = "#94a3b8"
+        # DARK MODE PALETTE
+        bg_color = "#0f172a"          # Slate 900
+        text_color = "#f8fafc"        # Slate 50
+        card_bg = "#1e293b"           # Slate 800
+        border_color = "#334155"      # Slate 700
+        sidebar_bg = "#111827"        # Gray 900
+        secondary_text = "#94a3b8"    # Slate 400
     else:
-        bg_color = "#f8fafc"
-        text_color = "#1e293b"
-        card_bg = "#ffffff"
-        border_color = "#e2e8f0"
-        sidebar_bg = "#ffffff"
-        secondary_text = "#64748b"
+        # LIGHT MODE PALETTE
+        bg_color = "#f8fafc"          # Slate 50
+        text_color = "#1e293b"        # Slate 800
+        card_bg = "#ffffff"           # White
+        border_color = "#e2e8f0"      # Slate 200
+        sidebar_bg = "#ffffff"        # White
+        secondary_text = "#64748b"    # Slate 500
 
     st.markdown(f"""
     <style>
@@ -61,45 +65,46 @@ def inject_css():
             background-color: {bg_color};
         }}
 
-        /* HIDE BRANDING */
+        /* HIDE DEFAULT STREAMLIT BRANDING */
         footer {{visibility: hidden !important;}}
         #MainMenu {{visibility: hidden;}}
         header {{visibility: hidden !important;}}
         .stAppDeployButton {{display: none !important;}}
         
-        /* SIDEBAR */
+        /* SIDEBAR STYLING */
         [data-testid="stSidebar"] {{
             background-color: {sidebar_bg};
             border-right: 1px solid {border_color};
         }}
         [data-testid="stSidebarCollapseButton"] {{display: none !important;}}
 
-        /* CARDS */
+        /* PROFESSIONAL METRIC CARDS */
         .metric-card {{
             background: {card_bg};
             border: 1px solid {border_color};
             border-radius: 12px;
             padding: 24px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
             color: {text_color};
         }}
         .metric-card:hover {{
             transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             border-color: #3b82f6;
         }}
         
-        /* HERO BANNER */
+        /* HERO BANNER GRADIENT */
         .hero-banner {{
             background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
             color: white;
-            padding: 30px;
+            padding: 40px;
             border-radius: 16px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
         }}
         
-        /* TABS */
+        /* CUSTOM TAB STYLING */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 10px;
             background-color: transparent;
@@ -108,6 +113,7 @@ def inject_css():
             border-radius: 6px;
             color: {secondary_text};
             font-weight: 600;
+            padding: 10px 20px;
         }}
         .stTabs [aria-selected="true"] {{
             background-color: {card_bg};
@@ -116,58 +122,82 @@ def inject_css():
             color: #3b82f6;
         }}
 
+        /* DATAFRAME & TABLE STYLING */
+        .stDataFrame {{ border: 1px solid {border_color}; border-radius: 8px; overflow: hidden; }}
+        
+        /* HEADERS */
+        h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; font-weight: 700; }}
+        
+        /* INSIGHT BOX */
+        .insight-box {{
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: {text_color};
+        }}
+
         /* LEADERBOARD BOXES */
         .leaderboard-box {{
             background-color: {card_bg};
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 10px;
             margin-bottom: 10px;
             border-left-width: 5px;
             border-left-style: solid;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: transform 0.2s;
         }}
-        .leaderboard-rank {{ font-weight: 800; font-size: 1.1em; opacity: 0.8; margin-right: 10px; }}
-        .leaderboard-val {{ font-weight: 700; font-size: 1.1em; }}
-
-        /* HEADERS */
-        h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; font-weight: 700; }}
-        
-        /* DARK MODE INPUT FIXES */
-        .stTextInput input, .stDateInput input, .stNumberInput input {{
-            color: {text_color} !important;
+        .leaderboard-box:hover {{
+            transform: scale(1.01);
         }}
+        .lb-rank {{ font-size: 1.1em; font-weight: 700; opacity: 0.8; }}
+        .lb-name {{ font-weight: 600; font-size: 1.05em; margin-left: 10px; }}
+        .lb-val {{ font-weight: 800; font-size: 1.1em; }}
     </style>
     """, unsafe_allow_html=True)
 
 inject_css()
 
 # ========================================
-# 4. DATA SETUP & UTILS
+# 4. SETUP & AUTHENTICATION
 # ========================================
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
-# Updated: Use a directory for monthly forecasts
-FORECAST_DIR = DATA_DIR / "forecast" 
+FORECAST_FILE = DATA_DIR / "monthly_targets.csv" # NEW: File to store forecasts
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
-# AUTH SECRETS (Defaulting for safety)
+# CONFIGURATION SECRETS
 SECRETS = {}
 try: SECRETS = dict(st.secrets)
 except: SECRETS = {}
+
+GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
+GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
+GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
 
 _default_users = {
     "admin": hashlib.sha256("kbrc123".encode()).hexdigest(),
     "manager": hashlib.sha256("sjk@2025".encode()).hexdigest(),
     "production": hashlib.sha256("Production@123".encode()).hexdigest()
 }
-USERS = _default_users.copy()
 
-# TIME UTILS
+USERS: Dict[str, str] = _default_users.copy()
+if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
+    for k, v in SECRETS["USERS"].items():
+        USERS[k] = v
+
+# ========================================
+# 5. LOGIC & UTILITY FUNCTIONS
+# ========================================
 def get_kuwait_time():
+    """Returns current time in Kuwait (UTC+3)"""
     return datetime.now(timezone.utc) + timedelta(hours=3)
 
 def get_greeting():
@@ -177,9 +207,9 @@ def get_greeting():
     else: return "Good Evening"
 
 def format_m3(value):
+    """Standardized formatting for Cubic Meters"""
     return f"{value:,.3f} m³"
 
-# LOGGING
 def init_logs():
     if not LOG_FILE.exists():
         with open(LOG_FILE, 'w', newline='') as f:
@@ -188,6 +218,7 @@ def init_logs():
 def log_event(username: str, event: str):
     init_logs()
     try:
+        # Use Kuwait Time for logging
         ts = get_kuwait_time().strftime("%Y-%m-%d %H:%M:%S")
         with open(LOG_FILE, 'a', newline='') as f:
             csv.writer(f).writerow([ts, username, event])
@@ -198,43 +229,39 @@ def get_logs() -> pd.DataFrame:
     try: return pd.read_csv(LOG_FILE)
     except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
-# FORECAST MANAGEMENT (UPDATED TO USE FOLDER/FILE PER MONTH)
-def save_forecast_entry(year: int, month: str, target: float):
-    """Saves a forecast entry as a CSV file in the forecast directory."""
-    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+# --- FORECAST FUNCTIONS (NEW) ---
+def init_forecasts():
+    if not FORECAST_FILE.exists():
+        with open(FORECAST_FILE, 'w', newline='') as f:
+            csv.writer(f).writerow(["Year", "Month", "Target"])
+
+def save_forecast(year: int, month: str, target: float):
+    init_forecasts()
+    # Read existing
+    try:
+        df = pd.read_csv(FORECAST_FILE)
+    except:
+        df = pd.DataFrame(columns=["Year", "Month", "Target"])
     
-    # Filename: YYYY-MonthName.csv
-    fname = f"{int(year)}-{str(month).strip()}.csv"
-    p = FORECAST_DIR / fname
-    
-    # Create a simple DataFrame with the target value
-    # Ensure the target is saved as a float
-    data = pd.DataFrame([{"Target": float(target)}])
-    data.to_csv(p, index=False)
+    # Update or Append
+    # Remove old entry for this Y/M if exists
+    df = df[~((df['Year'] == year) & (df['Month'] == month))]
+    # Add new
+    new_row = pd.DataFrame([{"Year": year, "Month": month, "Target": target}])
+    df = pd.concat([df, new_row], ignore_index=True)
+    df.to_csv(FORECAST_FILE, index=False)
 
 def get_forecast(year: int, month: str) -> float:
-    """Retrieves target from the specific monthly CSV file."""
-    FORECAST_DIR.mkdir(parents=True, exist_ok=True) # Ensure directory exists when reading
-    
-    fname = f"{int(year)}-{str(month).strip()}.csv"
-    p = FORECAST_DIR / fname
-    
-    if p.exists():
-        try:
-            df = pd.read_csv(p)
-            # Find the 'Target' column and get the first numeric value
-            if not df.empty and 'Target' in df.columns:
-                target_val = pd.to_numeric(df['Target'].iloc[0], errors='coerce')
-                if not pd.isna(target_val):
-                    return float(target_val)
-        except Exception:
-            # Handle file read errors gracefully
-            pass 
-    
-    # Return 0.0 if file is missing or corrupted
+    init_forecasts()
+    try:
+        df = pd.read_csv(FORECAST_FILE)
+        row = df[(df['Year'] == year) & (df['Month'] == month)]
+        if not row.empty:
+            return float(row.iloc[0]['Target'])
+    except:
+        pass
     return 0.0
 
-# AUTH
 def check_credentials(username: str, password: str) -> bool:
     if not username: return False
     user = username.strip()
@@ -244,7 +271,6 @@ def check_credentials(username: str, password: str) -> bool:
         return v
     return False
 
-# FILE OPERATIONS
 def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
     p = DATA_DIR / fname
@@ -253,11 +279,7 @@ def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
     return p
 
 def list_saved_dates() -> List[str]:
-    # Exclude system files and the new 'forecast' directory
-    # Only list files that look like YYYY-MM-DD.csv
-    date_files = [p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") 
-                  if len(p.stem) == 10 and p.stem[4] == '-' and p.stem[7] == '-']
-    return sorted(date_files, reverse=True)
+    return sorted([p.name.replace(".csv", "") for p in DATA_DIR.glob("*.csv") if "access_logs" not in p.name and "monthly_targets" not in p.name], reverse=True)
 
 def load_saved(date_str: str) -> pd.DataFrame:
     p = DATA_DIR / f"{date_str}.csv"
@@ -271,43 +293,78 @@ def delete_saved(date_str: str) -> bool:
         return True
     return False
 
+def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
+    if not GITHUB_TOKEN or not GITHUB_REPO: return False, "Git not configured"
+    try:
+        repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
+        url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
+        if file_path.exists():
+             with open(file_path, "rb") as f: content = base64.b64encode(f.read()).decode()
+        else: return False, "File missing"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        resp = requests.get(url, headers=headers)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+        payload = {"message": msg, "content": content, "branch": "main", "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}}
+        if sha: payload["sha"] = sha
+        r = requests.put(url, headers=headers, json=payload)
+        return r.ok, "Synced" if r.ok else "Sync Failed"
+    except Exception as e: return False, str(e)
+
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
     df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
     df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
-    # Fill NaN values in Accumulative Production by propagating non-NaN values within each plant group
     df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
-    # If any remaining NaNs in 'Accumulative Production', fill with 0, although ffill/bfill should cover most cases
-    df2["Accumulative Production"] = df2["Accumulative Production"].fillna(0.0)
     return df2
 
 def generate_excel_report(df: pd.DataFrame, date_str: str):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, sheet_name='Data', index=False, float_format="%.3f")
+        workbook = writer.book
+        worksheet = writer.sheets['Data']
+        format_num = workbook.add_format({'num_format': '#,##0.000 "m³"'})
+        worksheet.set_column('B:C', 18, format_num)
     output.seek(0)
     return output
 
+def generate_smart_insights(df):
+    """
+    INNOVATION: Automatically generates text-based insights for the Executive Summary.
+    """
+    total = df['Production for the Day'].sum()
+    top_plant = df.groupby('Plant')['Production for the Day'].sum().idxmax() if not df.empty else "N/A"
+    top_val = df.groupby('Plant')['Production for the Day'].sum().max() if not df.empty else 0
+    avg = df['Production for the Day'].mean() if not df.empty else 0
+    
+    insight = f"**Executive Summary:** The total production for this period stands at **{format_m3(total)}**. "
+    insight += f"The leading facility is **{top_plant}**, contributing **{format_m3(top_val)}** to the total output. "
+    insight += f"On average, daily plant production is tracking at **{format_m3(avg)}**."
+    return insight
+
 # ========================================
-# 5. CHARTING ENGINE
+# 6. CHARTING ENGINE
 # ========================================
 def get_theme_colors(theme_name):
+    # Professional Solid Colors
     themes = {
-        "Neon Cyber": ["#F72585", "#7209B7", "#3A0CA3", "#4361EE", "#4CC9F0"],
-        "Executive Blue": ["#1E40AF", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"],
-        "Emerald City": ["#065F46", "#10B981", "#34D399", "#6EE7B7", "#A7F3D0"],
-        "Royal Purple": ["#581C87", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD"],
-        "Crimson Tide": ["#991B1B", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]
+        "Neon Cyber": ["#F72585", "#7209B7", "#3A0CA3", "#4361EE", "#4CC9F0"], # Bright/Neon
+        "Executive Blue": ["#1E40AF", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"], # Solid Blues
+        "Emerald City": ["#065F46", "#10B981", "#34D399", "#6EE7B7", "#A7F3D0"], # Solid Greens
+        "Royal Purple": ["#581C87", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD"], # Solid Purples
+        "Crimson Tide": ["#991B1B", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]  # Solid Reds
     }
-    return themes.get(theme_name, themes["Executive Blue"])
+    return themes.get(theme_name, themes["Neon Cyber"])
 
-def apply_chart_theme(fig, x_title=None, y_title=None):
+def apply_chart_theme(fig, x_axis_title="Date Range"):
     """
-    Applies professional styling to all charts.
-    Ensures labels/legends are readable in dark/light mode.
+    Applies the professional layout to charts.
+    Ensures labels/legends are readable in both Dark and Light modes.
     """
     dark = st.session_state["dark_mode"]
+    # Dynamic text color based on mode
     text_col = "#ffffff" if dark else "#1e293b"
+    # Subtle grid lines
     grid_col = "rgba(255, 255, 255, 0.1)" if dark else "rgba(0, 0, 0, 0.05)"
     
     fig.update_layout(
@@ -315,22 +372,31 @@ def apply_chart_theme(fig, x_title=None, y_title=None):
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=30, b=10, l=10, r=10),
-        xaxis=dict(showgrid=False, linecolor=grid_col, tickfont=dict(color=text_col), title=x_title),
-        yaxis=dict(showgrid=True, gridcolor=grid_col, linecolor=grid_col, tickfont=dict(color=text_col), title=y_title, tickformat=',.0f'),
+        xaxis=dict(showgrid=False, linecolor=grid_col, tickfont=dict(color=text_col), title=x_axis_title),
+        yaxis=dict(showgrid=True, gridcolor=grid_col, linecolor=grid_col, tickfont=dict(color=text_col), 
+                   # Ensure exact values for Y-axis (Production/Volume)
+                   tickformat=',.3f', title="Production Volume (m³)"), 
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color=text_col)),
         hovermode="x unified"
+    )
+    
+    # Force tooltip to show Plant Name instead of just date or index
+    # We update traces to look for customdata or specific text
+    fig.update_traces(
+        hovertemplate="<b>%{x}</b><br>Value: %{y:,.3f} m³<br>Plant: %{text}<extra></extra>" if 'text' in fig.data[0] else None
     )
     return fig
 
 # ========================================
-# 6. MAIN APP LOGIC
+# 7. MAIN APPLICATION LOGIC
 # ========================================
 
-# --- LOGIN SCREEN ---
+# LOGIN SCREEN
 if not st.session_state.get("logged_in", False):
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
+        # Dynamic Card for Login
         st.markdown(f"""
         <div style="background:{'#1e293b' if st.session_state.get('dark_mode') else 'white'}; padding:40px; border-radius:20px; box-shadow:0 20px 40px -10px rgba(0,0,0,0.2); text-align:center; border:1px solid #334155;">
             <h1 style="color:{'#f8fafc' if st.session_state.get('dark_mode') else '#0f172a'}; margin-bottom:0;">KBRC DASHBOARD</h1>
@@ -349,14 +415,12 @@ if not st.session_state.get("logged_in", False):
                 else: st.error("Access Denied")
     st.stop()
 
-# --- SIDEBAR CONFIG ---
+# SIDEBAR CONFIGURATION
 user = st.session_state["username"]
-text_col = "#f8fafc" if st.session_state["dark_mode"] else "#0f172a"
-
 st.sidebar.markdown(f"""
 <div style="padding:20px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:20px; background-color: {'#1e293b' if st.session_state['dark_mode'] else '#ffffff'};">
     <div style="color:#64748b; font-size:0.8rem; font-weight:600; text-transform:uppercase;">{get_greeting()}</div>
-    <div style="color:{text_col}; font-size:1.4rem; font-weight:800; margin-top:4px;">{user.title()}</div>
+    <div style="color:{'#f8fafc' if st.session_state['dark_mode'] else '#0f172a'}; font-size:1.4rem; font-weight:800; margin-top:4px;">{user.title()}</div>
     <div style="margin-top:10px; display:flex; align-items:center;">
         <span style="height:10px; width:10px; background-color:#10b981; border-radius:50%; margin-right:8px; display:inline-block;"></span>
         <span style="color:#10b981; font-size:0.8rem; font-weight:600;">System Active</span>
@@ -370,63 +434,35 @@ mode = st.sidebar.radio("Navigation", menu)
 
 st.sidebar.markdown("---")
 
-# --- FORECAST INPUT SECTION (Manager Only - UPDATED) ---
+# --- MANAGER ONLY: FORECAST SETTING ---
 if user == "manager":
-    st.sidebar.markdown("### 🎯 Monthly Targets")
-    with st.sidebar.expander("Set Forecast Target", expanded=False):
-        
-        current_date = get_kuwait_time().date()
-        
-        f_year = st.selectbox("Year", [current_date.year, current_date.year + 1], key="f_year")
-        f_month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-        
-        # Default to the current month index
-        default_month_index = current_date.month - 1
-        f_month = st.selectbox("Month", f_month_names, index=default_month_index, key="f_month")
-        
-        # Check current value to pre-fill the input
-        current_target = get_forecast(f_year, f_month)
-        
-        # Set default input value: current target if > 0, otherwise 40000.0
-        target_input_value = current_target if current_target > 0 else 40000.0
-        
-        target_input = st.number_input(
-            f"Target Volume for {f_month} {f_year} (m³)",
-            min_value=0.0,
-            value=target_input_value,
-            step=100.0,
-            format="%.0f",
-            key="target_input"
-        )
-        
-        if st.button(f"Save Target for {f_month}"):
-            try:
-                if target_input < 0:
-                    st.sidebar.error("Target must be a positive value.")
-                else:
-                    # Save the current value of target_input, not the session state key
-                    save_forecast_entry(f_year, f_month, target_input)
-                    st.session_state.target_input = target_input # Update state for immediate display fix
-                    st.sidebar.success(f"Forecast of {target_input:,.0f} m³ saved for {f_month} {f_year}.")
-                    log_event(user, f"Set forecast target for {f_month} {f_year} to {target_input:,.0f} m³")
-            except Exception as e:
-                st.sidebar.error(f"Error saving target: {e}")
+    with st.sidebar.expander("🎯 Manager Forecast Controls"):
+        f_year = st.selectbox("Forecast Year", [datetime.now().year, datetime.now().year + 1])
+        f_month = st.selectbox("Forecast Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
+        f_target = st.number_input("Monthly Target (m³)", min_value=0.0, step=100.0)
+        if st.button("Save Forecast"):
+            save_forecast(f_year, f_month, f_target)
+            st.success(f"Target saved for {f_month} {f_year}")
+            st.rerun()
 
 st.sidebar.markdown("---")
 
-# --- SETTINGS ---
+# DARK MODE TOGGLE
 is_dark = st.sidebar.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"])
 if is_dark != st.session_state["dark_mode"]:
     st.session_state["dark_mode"] = is_dark
     st.rerun()
 
-theme_list = ["Executive Blue", "Neon Cyber", "Emerald City", "Royal Purple", "Crimson Tide"]
-theme_sel = st.sidebar.selectbox("Theme", theme_list, index=0)
+# THEME SELECTOR
+theme_sel = st.sidebar.selectbox("Chart Theme", 
+                                 ["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"],
+                                 index=["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"].index(st.session_state.get("theme", "Neon Cyber")))
 if theme_sel != st.session_state.get("theme"):
     st.session_state["theme"] = theme_sel
     st.rerun()
 
-current_theme_colors = get_theme_colors(st.session_state.get("theme", "Executive Blue"))
+current_theme_colors = get_theme_colors(st.session_state.get("theme", "Neon Cyber"))
+alert_threshold = st.sidebar.number_input("Alert Threshold (m³)", 50.0, step=10.0)
 
 if st.sidebar.button("Logout"):
     log_event(user, "Logout")
@@ -434,284 +470,224 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 # ========================================
-# MODULE: EXECUTIVE ANALYTICS
+# MODULE 1: EXECUTIVE ANALYTICS
 # ========================================
 if mode == "Analytics":
     st.title("Executive Analytics")
     
-    saved_dates_str = list_saved_dates()
-    
-    if not saved_dates_str:
-        st.warning("No historical data found. Please upload data first.")
+    saved = list_saved_dates()
+    if len(saved) < 2:
+        st.warning("Insufficient data. Please upload at least 2 days of production records.")
         st.stop()
-    
-    # --- DATE CONTROLS ---
-    
-    # Safely convert saved date strings to date objects
-    saved_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in saved_dates_str]
-    min_date = min(saved_dates)
-    max_date = max(saved_dates)
-
-    # Initialize session state for date pickers
-    if "start_d" not in st.session_state:
-        # Default to 30 days ago or the min date, whichever is newer
-        default_start = max(min_date, max_date - timedelta(days=30))
-        st.session_state.start_d = default_start
-    if "end_d" not in st.session_state: 
-        st.session_state.end_d = max_date
-
+        
+    # DATE FILTERING
     c1, c2 = st.columns(2)
-    with c1: 
-        # Update session state via key, ensure value is a date object
-        start_d = st.date_input("Start Date", value=st.session_state.start_d, min_value=min_date, max_value=max_date, key="start_d_input")
-        st.session_state.start_d = start_d
-    with c2: 
-        end_d = st.date_input("End Date", value=st.session_state.end_d, min_value=min_date, max_value=max_date, key="end_d_input")
-        st.session_state.end_d = end_d
-        
-    # Validation
-    if st.session_state.start_d > st.session_state.end_d:
-        st.error("Error: Start Date cannot be after End Date.")
-        st.stop()
-        
-    start_d = st.session_state.start_d
-    end_d = st.session_state.end_d
-
-    # --- DATA ENGINE ---
+    with c1: start_d = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
+    with c2: end_d = st.date_input("End Date", value=datetime.today())
+    
+    # DATA LOADING
     frames = []
-    
-    # Load all data files that fall within the selected date range
-    for d_str in saved_dates_str:
-        d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
-        if start_d <= d_obj <= end_d:
-            try:
-                df = load_saved(d_str)
-                df['Date'] = pd.to_datetime(d_obj) # Assign date as datetime object
-                df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
-                frames.append(df)
-            except Exception as e: 
-                # Log load errors but continue processing other files
-                print(f"Error loading data for {d_str}: {e}")
-                continue
+    for d in saved:
+        try:
+            df = load_saved(d)
+            df['Date'] = pd.to_datetime(df['Date'])
+            df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
+            frames.append(df)
+        except: continue
         
-    if not frames: 
-        st.info("No data available within the selected date range.")
-        st.stop()
-    
+    if not frames: st.stop()
     full_df = pd.concat(frames, ignore_index=True)
-    full_df = full_df.sort_values('Date')
     
-    # --- FINAL CLEANUP AND METRICS ---
-    df_filtered = safe_numeric(full_df)
-    # Deduplicate rows by taking the last entry for a given day and plant
+    # STRICT FILTERING (Removes unwanted dates from Oct if not selected)
+    mask = (full_df['Date'] >= pd.to_datetime(start_d)) & (full_df['Date'] <= pd.to_datetime(end_d))
+    df_filtered = full_df[mask].copy().sort_values('Date')
+    
+    if df_filtered.empty:
+        st.info("No data available for the selected date range.")
+        st.stop()
+        
+    df_filtered = safe_numeric(df_filtered)
+    # Deduplicate to prevent math errors
     df_filtered = df_filtered.drop_duplicates(subset=['Date', 'Plant'], keep='last')
 
-    # If, after cleaning, the DataFrame is empty, stop.
-    if df_filtered.empty: 
-        st.info("Data for the selected range is empty after processing.")
-        st.stop()
+    # --- TOP 3 LEADERBOARD CALCULATION ---
+    # Top 3 by Sum
+    top_sum = df_filtered.groupby("Plant")["Production for the Day"].sum().sort_values(ascending=False).head(3)
+    # Top 3 by Average
+    top_avg = df_filtered.groupby("Plant")["Production for the Day"].mean().sort_values(ascending=False).head(3)
+
+    # --- FORECAST LOGIC (New Feature) ---
+    # Determine the "Dominant" month in selection to pick which forecast to show
+    dom_month_idx = df_filtered['Date'].dt.month.mode()[0]
+    dom_year_idx = df_filtered['Date'].dt.year.mode()[0]
+    month_name = date(1900, dom_month_idx, 1).strftime('%B')
     
-    # --- METRICS CALCULATIONS ---
+    monthly_target = get_forecast(dom_year_idx, month_name)
     total_vol = df_filtered['Production for the Day'].sum()
-    daily_production_df = df_filtered.groupby('Date')['Production for the Day'].sum()
-    avg_daily = daily_production_df.mean()
-    
-    # Forecast Logic: Gets target for the month containing the start date
-    # Use the month of the start date for comparison
-    forecast_month = start_d.strftime("%B")
-    forecast_year = start_d.year
-    monthly_target_val = get_forecast(forecast_year, forecast_month) 
-    
-    # If target is not set, use a fallback value (40,000 m³)
-    if monthly_target_val == 0.0:
-        monthly_target_val = 40000.0 # Default fallback for display if file is missing
+    avg_daily = df_filtered.groupby('Date')['Production for the Day'].sum().mean()
     
     # Calculate Variance
-    variance = total_vol - monthly_target_val
-    var_color = "#10b981" if variance >= 0 else "#ef4444" # Green if above, Red if below
-    var_symbol = "+" if variance >= 0 else ""
+    variance = total_vol - monthly_target
+    var_color = "#10b981" if variance >= 0 else "#ef4444"
+    var_icon = "▲" if variance >= 0 else "▼"
     
-    # Calculate days in the current month (or selected month for start_d)
-    # Simple approximation of 30 days for Expected Daily calculation
-    days_in_month = 30
-    
-    # Expected Average (Target / 30 days)
-    expected_daily_avg = monthly_target_val / days_in_month if monthly_target_val > 0 else 0
-
-    # --- HERO SECTION ---
+    # ------------------ HERO SECTION ------------------
     st.markdown(f"""
     <div class="hero-banner">
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
-            <!-- BOX 1: TOTAL PRODUCTION (BOLD) -->
             <div>
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Total Production (Selected Period)</div>
-                <div style="font-size:3.5rem; font-weight:800; color: white;">{total_vol:,.0f}</div>
-                <div style="font-size:0.8rem; opacity:0.8;">m³</div>
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Daily Average</div>
+                <div style="font-size:3rem; font-weight:800;">{avg_daily:,.0f} m³</div>
             </div>
-            
-            <!-- BOX 2: FORECAST & VARIANCE -->
             <div style="border-left:1px solid rgba(255,255,255,0.2); border-right:1px solid rgba(255,255,255,0.2);">
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({forecast_month})</div>
-                <div style="font-size:3rem; font-weight:800; color:{var_color};">{monthly_target_val:,.0f}</div>
-                <div style="font-size:1rem; font-weight:600; margin-top:5px;">
-                    Var: <span style="color:{var_color}">{var_symbol}{abs(variance):,.0f} m³</span>
-                </div>
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({month_name})</div>
+                <div style="font-size:3rem; font-weight:800;">{monthly_target:,.0f} m³</div>
             </div>
-            
-            <!-- BOX 3: AVERAGES -->
             <div>
-                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Expected Avg / Actual Avg</div>
-                <div style="font-size:2.5rem; font-weight:800; margin-bottom:5px;">
-                    <span style="font-weight:900;">{expected_daily_avg:,.0f}</span> 
-                    <span style="font-size:1.5rem; opacity:0.6;">/</span> {avg_daily:,.0f}
-                </div>
-                <div style="font-size:0.8rem; font-weight:bold; color:#fbbf24;">Expected Daily Average: {expected_daily_avg:,.0f} m³</div>
+                <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast Variance</div>
+                <div style="font-size:3rem; font-weight:800; color:{var_color};">{var_icon} {abs(variance):,.0f} m³</div>
+                <div style="font-size:0.8rem; opacity:0.8;">Actual: {total_vol:,.0f} m³</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # --- TOP 3 BOXES ---
-    st.markdown("### 🏆 Top 3 Performance Leaders")
+    # ------------------ LEADERBOARDS (New Feature) ------------------
+    st.markdown("### 🏆 Top Performance Leaders")
+    col_l1, col_l2 = st.columns(2)
     
-    plant_grp = df_filtered.groupby("Plant")["Production for the Day"]
-    top_total = plant_grp.sum().sort_values(ascending=False).head(3)
-    top_avg = plant_grp.mean().sort_values(ascending=False).head(3)
-    
-    c_lead1, c_lead2 = st.columns(2)
-    
-    with c_lead1:
+    with col_l1:
         st.markdown("**Highest Total Production**")
-        for i, (p_name, p_val) in enumerate(top_total.items()):
-            border_col = current_theme_colors[i % len(current_theme_colors)]
+        for i, (plant, val) in enumerate(top_sum.items()):
+            color = current_theme_colors[i % len(current_theme_colors)]
             st.markdown(f"""
-            <div class="leaderboard-box" style="border-left-color: {border_col};">
+            <div class="leaderboard-box" style="border-left-color: {color};">
                 <div>
-                    <span class="leaderboard-rank" style="color:{border_col}">#{i+1}</span>
-                    <span class="leaderboard-val">{p_name}</span>
+                    <span class="lb-rank" style="color:{color}">#{i+1}</span>
+                    <span class="lb-name">{plant}</span>
                 </div>
-                <span class="leaderboard-val">{format_m3(p_val)}</span>
+                <span class="lb-val">{format_m3(val)}</span>
             </div>
             """, unsafe_allow_html=True)
             
-    with c_lead2:
+    with col_l2:
         st.markdown("**Highest Average Efficiency**")
-        for i, (p_name, p_val) in enumerate(top_avg.items()):
-            border_col = current_theme_colors[-(i+1)] 
+        for i, (plant, val) in enumerate(top_avg.items()):
+            color = current_theme_colors[-(i+1) % len(current_theme_colors)] # Reverse colors for distinction
             st.markdown(f"""
-            <div class="leaderboard-box" style="border-left-color: {border_col};">
+            <div class="leaderboard-box" style="border-left-color: {color};">
                 <div>
-                    <span class="leaderboard-rank" style="color:{border_col}">#{i+1}</span>
-                    <span class="leaderboard-val">{p_name}</span>
+                    <span class="lb-rank" style="color:{color}">#{i+1}</span>
+                    <span class="lb-name">{plant}</span>
                 </div>
-                <span class="leaderboard-val">{format_m3(p_val)} / day</span>
+                <span class="lb-val">{format_m3(val)}/day</span>
             </div>
             """, unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # --- PRODUCTION VS EXPECTED GRAPH ---
-    st.subheader(f"📈 Production vs. Expected Target ({start_d.strftime('%b %d')} - {end_d.strftime('%b %d')})")
-    
-    daily_sums = daily_production_df.reset_index()
-    daily_sums['Target'] = expected_daily_avg
-    
-    fig_target = go.Figure()
-    # Actual (Blue)
-    fig_target.add_trace(go.Scatter(
-        x=daily_sums['Date'], 
-        y=daily_sums['Production for the Day'],
-        mode='lines+markers',
-        name='Actual Production',
-        line=dict(color='#3b82f6', width=3),
-        marker=dict(size=8),
-        hovertemplate="<b>Date:</b> %{x}<br><b>Actual:</b> %{y:,.3f} m³<extra></extra>"
-    ))
-    # Expected (Red)
-    fig_target.add_trace(go.Scatter(
-        x=daily_sums['Date'], 
-        y=daily_sums['Target'],
-        mode='lines',
-        name='Expected Target',
-        line=dict(color='#ef4444', width=2, dash='dash'),
-        hovertemplate="<b>Date:</b> %{x}<br><b>Target:</b> %{y:,.3f} m³<extra></extra>"
-    ))
-    
-    fig_target = apply_chart_theme(fig_target, x_title="Date", y_title="Volume (m³)")
-    st.plotly_chart(fig_target, use_container_width=True)
+    # TABS FOR WEEKLY / MONTHLY SPLIT
+    tab_week, tab_month = st.tabs(["📅 Weekly Performance", "📆 Monthly Performance"])
 
-    # --- WEEKLY & MONTHLY TABS ---
-    t_week, t_month = st.tabs(["📅 Weekly Performance", "📆 Monthly Performance"])
-    
-    with t_week:
-        # Helper to convert Week Num to Date Range (e.g. Dec 1 - Dec 7)
-        # We group by Week Start Date
-        df_filtered['Week_Start'] = df_filtered['Date'].apply(lambda x: x.date() - timedelta(days=x.date().weekday()))
-        
-        wk_agg = df_filtered.groupby(['Plant', 'Week_Start']).agg({
+    # --- WEEKLY ANALYSIS ---
+    with tab_week:
+        st.subheader("Weekly Analytics")
+        # Aggregation Logic
+        week_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='W-MON')]).agg({
             'Production for the Day': ['sum', 'mean'],
             'Accumulative Production': 'max'
         }).reset_index()
-        wk_agg.columns = ['Plant', 'Week_Start', 'Total', 'Avg', 'Accum']
+        week_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
         
-        # Create friendly Label: "Dec 02 - Dec 08"
-        wk_agg['Week_Label'] = wk_agg['Week_Start'].apply(lambda d: f"{d.strftime('%b %d')} - {(d + timedelta(days=6)).strftime('%b %d')}")
+        # Format Date Label
+        week_agg['Week Label'] = week_agg['Date'].dt.strftime('Wk %W (%d %b)')
+        week_agg['FullRange'] = week_agg['Date'].apply(lambda x: f"Week ending {x.strftime('%Y-%m-%d')}")
         
+        # Post-Aggregation Filter (Double Check)
+        week_agg = week_agg[(week_agg['Date'] >= pd.to_datetime(start_d)) & (week_agg['Date'] <= pd.to_datetime(end_d))]
+
         c_w1, c_w2 = st.columns(2)
         with c_w1:
-            st.markdown("**Weekly Total (Sum)**")
-            fig = px.bar(wk_agg, x='Week_Label', y='Total', color='Plant', barmode='group',
-                         color_discrete_sequence=current_theme_colors,
-                         hover_name='Plant')
-            # Updated tooltip
-            fig.update_traces(hovertemplate="<b>%{x}</b><br>Plant: %{hovertext}<br>Total: %{y:,.3f} m³<extra></extra>")
-            st.plotly_chart(apply_chart_theme(fig, x_title="Week Range"), use_container_width=True)
+            fig = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
+                         title="Weekly Total Production (Sum)", barmode='group',
+                         text='Plant', # For tooltip identification
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
         with c_w2:
-            st.markdown("**Weekly Average**")
-            fig = px.bar(wk_agg, x='Week_Label', y='Avg', color='Plant', barmode='group',
-                         color_discrete_sequence=current_theme_colors,
-                         hover_name='Plant')
-            fig.update_traces(hovertemplate="<b>%{x}</b><br>Plant: %{hovertext}<br>Avg: %{y:,.3f} m³<extra></extra>")
-            st.plotly_chart(apply_chart_theme(fig, x_title="Week Range"), use_container_width=True)
+            fig = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
+                         title="Weekly Average Production (Mean)", barmode='group',
+                         text='Plant',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
-        st.markdown("**Weekly Accumulative Trend**")
-        fig = px.line(wk_agg, x='Week_Label', y='Accum', color='Plant', markers=True,
-                      color_discrete_sequence=current_theme_colors, hover_name='Plant')
-        fig.update_traces(hovertemplate="<b>%{x}</b><br>Plant: %{hovertext}<br>Accum: %{y:,.3f} m³<extra></extra>")
-        st.plotly_chart(apply_chart_theme(fig, x_title="Week Range"), use_container_width=True)
+        st.markdown("#### Weekly Accumulative Trend")
+        fig_acc = px.line(week_agg, x='Week Label', y='Accumulative', color='Plant', markers=True,
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+        st.plotly_chart(apply_chart_theme(fig_acc), use_container_width=True)
 
-    with t_month:
-        # Simplier Month Chart as requested (Trajectory)
-        st.markdown("**Monthly Accumulative Trajectory (By Plant)**")
-        fig_traj = px.line(df_filtered, x='Date', y='Accumulative Production', color='Plant',
-                           color_discrete_sequence=current_theme_colors, hover_name='Plant')
-        fig_traj.update_traces(hovertemplate="<b>%{x}</b><br>Plant: %{hovertext}<br>Accum: %{y:,.3f} m³<extra></extra>")
-        st.plotly_chart(apply_chart_theme(fig_traj, x_title="Date"), use_container_width=True)
+    # --- MONTHLY ANALYSIS ---
+    with tab_month:
+        st.subheader("Monthly Analytics")
         
-        # Monthly Sum Bars
-        mo_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='M')])['Production for the Day'].sum().reset_index()
-        mo_agg['Month_Label'] = mo_agg['Date'].dt.strftime('%B %Y')
+        # 1. Forecast Trajectory Chart (Replaces complex graph)
+        # Calculate daily cumulative sum for the filtered period
+        daily_cum = df_filtered.groupby('Date')['Production for the Day'].sum().cumsum().reset_index()
+        daily_cum.columns = ['Date', 'Actual Cumulative']
         
+        # Create Target Line (Linear projection for the month)
+        days_in_view = (df_filtered['Date'].max() - df_filtered['Date'].min()).days + 1
+        daily_target_rate = monthly_target / 30 # Approx daily target
+        daily_cum['Target Trend'] = [daily_target_rate * (i+1) for i in range(len(daily_cum))]
+        
+        fig_traj = go.Figure()
+        fig_traj.add_trace(go.Scatter(x=daily_cum['Date'], y=daily_cum['Actual Cumulative'], mode='lines+markers', name='Actual Production', line=dict(color='#10b981', width=4)))
+        fig_traj.add_trace(go.Scatter(x=daily_cum['Date'], y=daily_cum['Target Trend'], mode='lines', name='Target Trajectory', line=dict(color='#ef4444', dash='dot')))
+        
+        fig_traj.update_layout(title=f"Monthly Trajectory: Actual vs Forecast ({month_name})")
+        st.plotly_chart(apply_chart_theme(fig_traj), use_container_width=True)
+        
+        # Standard Monthly Charts
+        month_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='M')]).agg({
+            'Production for the Day': ['sum', 'mean'],
+            'Accumulative Production': 'max'
+        }).reset_index()
+        month_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
+        month_agg['Month Label'] = month_agg['Date'].dt.strftime('%B %Y')
+        
+        month_agg = month_agg[(month_agg['Date'] >= pd.to_datetime(start_d)) & (month_agg['Date'] <= pd.to_datetime(end_d))]
+
         c_m1, c_m2 = st.columns(2)
         with c_m1:
-            st.markdown("**Monthly Total Production**")
-            fig = px.bar(mo_agg, x='Month_Label', y='Production for the Day', color='Plant', barmode='group',
-                         color_discrete_sequence=current_theme_colors, hover_name='Plant')
-            fig.update_traces(hovertemplate="<b>%{x}</b><br>Plant: %{hovertext}<br>Total: %{y:,.3f} m³<extra></extra>")
-            st.plotly_chart(apply_chart_theme(fig, x_title="Month"), use_container_width=True)
+            fig = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
+                         title="Monthly Total Production (Sum)", barmode='group',
+                         text='Plant',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            
+        with c_m2:
+            fig = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
+                         title="Monthly Average Production (Mean)", barmode='group',
+                         text='Plant',
+                         color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            
+        st.markdown("#### Monthly Accumulative Trend")
+        fig_acc_m = px.line(month_agg, x='Month Label', y='Accumulative', color='Plant', markers=True,
+                            text='Plant',
+                            color_discrete_sequence=current_theme_colors)
+        st.plotly_chart(apply_chart_theme(fig_acc_m), use_container_width=True)
 
 # ========================================
-# MODULE 2: UPLOAD
+# MODULE 2: UPLOAD DATA
 # ========================================
 elif mode == "Upload New Data":
     st.title("Daily Production Entry")
-    
     c1, c2 = st.columns([2, 1])
-    with c1: uploaded = st.file_uploader("Upload Excel File (Daily Data)", type=["xlsx"])
+    with c1: uploaded = st.file_uploader("Upload Excel File", type=["xlsx"])
     with c2:
-        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today().date()
-        # Ensure selected date is a date object
+        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today()
         sel_date = st.date_input("Production Date", value=st.session_state.up_date)
         st.session_state.up_date = sel_date
         
@@ -728,7 +704,9 @@ elif mode == "Upload New Data":
                     df_clean['Date'] = sel_date.strftime("%Y-%m-%d")
                     save_path = save_csv(df_clean, sel_date, overwrite=True)
                     log_event(user, f"Uploaded {sel_date}")
+                    attempt_git_push(save_path, f"Add {sel_date}")
                     
+                    # Show Success
                     df_disp = df_clean[~df_clean["Plant"].astype(str).str.upper().str.contains("TOTAL")]
                     df_disp = safe_numeric(df_disp)
                     tot = df_disp["Production for the Day"].sum()
@@ -760,15 +738,11 @@ elif mode == "Data Management":
 # MODULE 4: HISTORICAL ARCHIVES
 # ========================================
 elif mode == "Historical Archives":
-    st.title("Historical Data Viewer")
+    st.title("Historical Data")
     files = list_saved_dates()
-    if not files: st.info("No records."); st.stop()
-    
-    # Safely get the max date as default value
-    max_d_obj = datetime.strptime(files[0], "%Y-%m-%d").date()
-    if "hist_d" not in st.session_state: st.session_state.hist_d = max_d_obj
-    
-    sel_d = st.date_input("Select Date", value=st.session_state.hist_d, max_value=max_d_obj)
+    if not files: st.stop()
+    if "hist_d" not in st.session_state: st.session_state.hist_d = datetime.strptime(files[0], "%Y-%m-%d").date()
+    sel_d = st.date_input("Select Date", value=st.session_state.hist_d)
     st.session_state.hist_d = sel_d
     d_str = sel_d.strftime("%Y-%m-%d")
     
@@ -786,61 +760,44 @@ elif mode == "Historical Archives":
         """, unsafe_allow_html=True)
         st.dataframe(df, use_container_width=True)
         
-        # --- NEW HISTORICAL CHARTS (Including Comparison) ---
-        st.markdown("### 📊 Daily Production Breakdown")
+        st.markdown("### 📊 Daily Breakdown")
+        # Added New Charts as requested
         c1, c2 = st.columns(2)
         with c1:
+            st.markdown("**Production Share**")
             fig = px.pie(df, names='Plant', values='Production for the Day', color_discrete_sequence=current_theme_colors)
             st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
         with c2:
-            fig = px.bar(df, x='Plant', y='Production for the Day', color='Plant', color_discrete_sequence=current_theme_colors)
-            fig.update_traces(hovertemplate="<b>Plant:</b> %{x}<br><b>Vol:</b> %{y:,.3f} m³<extra></extra>")
-            st.plotly_chart(apply_chart_theme(fig, x_title="Plant"), use_container_width=True)
+            st.markdown("**Production Volume**")
+            fig = px.bar(df, x='Plant', y='Production for the Day', color='Plant', text='Plant', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
             
-        st.markdown("### 📈 Accumulative Production Analysis")
-        # Add 2-3 charts for accumulative
+        st.markdown("### 📈 Accumulative Analysis")
+        # Accumulative Charts for the specific day
         c3, c4 = st.columns(2)
         with c3:
             st.markdown("**Accumulative by Plant**")
-            fig = px.bar(df, x='Plant', y='Accumulative Production', color='Plant', 
-                         color_discrete_sequence=current_theme_colors)
-            fig.update_traces(hovertemplate="<b>Plant:</b> %{x}<br><b>Accum:</b> %{y:,.3f} m³<extra></extra>")
-            st.plotly_chart(apply_chart_theme(fig, x_title="Plant"), use_container_width=True)
+            fig_acc_bar = px.bar(df, x='Plant', y='Accumulative Production', color='Plant', text='Plant', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig_acc_bar), use_container_width=True)
         with c4:
             st.markdown("**Accumulative Share**")
-            fig = px.pie(df, names='Plant', values='Accumulative Production', hole=0.4,
-                         color_discrete_sequence=current_theme_colors)
-            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
-            
-        st.markdown("### 🎯 Actual vs Expected (Daily)")
-        # Calculate expected for this specific day based on the monthly target
-        hist_month = sel_d.strftime("%B")
-        hist_year = sel_d.year
-        m_target = get_forecast(hist_year, hist_month)
-        # Fallback to 40k if no file is found for that month
-        if m_target == 0: m_target = 40000.0
-            
-        daily_target = m_target / 30 if m_target > 0 else 0
-        
-        # Create comparison DF
-        fig_comp = go.Figure()
-        fig_comp.add_trace(go.Bar(x=['Total Site'], y=[tot], name='Actual', marker_color='#3b82f6'))
-        fig_comp.add_trace(go.Bar(x=['Total Site'], y=[daily_target], name='Expected', marker_color='#ef4444'))
-        
-        st.plotly_chart(apply_chart_theme(fig_comp, x_title="Metric", y_title="Volume"), use_container_width=True)
+            fig_acc_pie = px.pie(df, names='Plant', values='Accumulative Production', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig_acc_pie), use_container_width=True)
 
 # ========================================
-# MODULE 5: LOGS
+# MODULE 5: AUDIT LOGS (MANAGER ONLY)
 # ========================================
 elif mode == "Audit Logs":
     if user != "manager": st.error("Access Restricted"); st.stop()
     st.title("Security Audit Logs")
     
-    log_date = st.date_input("Filter by Date", value=datetime.today().date())
-    logs = get_logs()
+    # Filter Controls
+    log_date = st.date_input("Filter by Date", value=datetime.today())
     
+    logs = get_logs()
     if not logs.empty:
         logs['Timestamp'] = pd.to_datetime(logs['Timestamp'])
+        # Filter Logic
         start_ts = pd.to_datetime(log_date)
         end_ts = start_ts + timedelta(days=1)
         daily_logs = logs[(logs['Timestamp'] >= start_ts) & (logs['Timestamp'] < end_ts)].sort_values('Timestamp', ascending=False)
@@ -862,3 +819,4 @@ st.sidebar.markdown("""
     <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color:#3b82f6; text-decoration:none;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
+
