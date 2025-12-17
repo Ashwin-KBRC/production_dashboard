@@ -193,6 +193,7 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA_DIR / "access_logs.csv"
 FORECAST_DIR = DATA_DIR / "forecasts"
+# Ensure forecasts directory exists
 FORECAST_DIR.mkdir(parents=True, exist_ok=True)
 REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
 
@@ -256,35 +257,47 @@ def get_logs() -> pd.DataFrame:
 # --- FORECAST FUNCTIONS (UPDATED - TEXT FILE BASED) ---
 def get_forecast_file_path(year: int, month: int) -> Path:
     """Get the forecast text file path for a specific month and year"""
+    # Ensure forecasts directory exists
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
     return FORECAST_DIR / f"forecast-{month:02d}-{year}.txt"
 
 def save_forecast_value(year: int, month: int, forecast_value: float) -> Tuple[bool, str]:
     """Save forecast value as text file"""
     try:
+        # Ensure forecasts directory exists
+        FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+        
         file_path = get_forecast_file_path(year, month)
         with open(file_path, 'w') as f:
             f.write(str(forecast_value))
         
+        st.info(f"Forecast saved locally at: {file_path}")
+        
         # Attempt to push to GitHub
         if GITHUB_TOKEN and GITHUB_REPO:
             success, message = attempt_git_push(file_path, f"Add/Update forecast for {calendar.month_name[month]} {year}")
-            if not success:
+            if success:
+                return True, f"Forecast saved for {calendar.month_name[month]} {year} and pushed to GitHub"
+            else:
                 return False, f"Saved locally but GitHub push failed: {message}"
-        
-        return True, f"Forecast saved for {calendar.month_name[month]} {year}"
+        else:
+            return True, f"Forecast saved locally for {calendar.month_name[month]} {year} (GitHub not configured)"
     except Exception as e:
         return False, f"Error saving forecast: {str(e)}"
 
 def get_forecast(year: int, month: int) -> float:
     """Get forecast value for specific month and year from text file"""
-    file_path = get_forecast_file_path(year, month)
-    if not file_path.exists():
-        return 0.0
-    
     try:
+        file_path = get_forecast_file_path(year, month)
+        if not file_path.exists():
+            return 0.0
+        
         with open(file_path, 'r') as f:
             content = f.read().strip()
-            return float(content)
+            if content:
+                return float(content)
+            else:
+                return 0.0
     except Exception as e:
         print(f"Error reading forecast: {e}")
         return 0.0
@@ -297,6 +310,9 @@ def get_current_month_forecast() -> float:
 def list_available_forecasts() -> List[Tuple[int, int, float]]:
     """List all available forecasts with values"""
     forecasts = []
+    # Ensure directory exists
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+    
     for file_path in FORECAST_DIR.glob("forecast-*.txt"):
         try:
             parts = file_path.stem.split('-')
@@ -325,7 +341,7 @@ def get_forecast_for_date_range(start_date: date, end_date: date) -> Dict[str, f
 def calculate_daily_target(monthly_forecast: float, year: int, month: int) -> float:
     """Calculate daily target based on monthly forecast"""
     days_in_month = calendar.monthrange(year, month)[1]
-    if days_in_month > 0:
+    if days_in_month > 0 and monthly_forecast > 0:
         return monthly_forecast / days_in_month
     return 0.0
 
@@ -378,25 +394,34 @@ def delete_saved(date_str: str) -> bool:
     return False
 
 def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
-    if not GITHUB_TOKEN or not GITHUB_REPO: return False, "Git not configured"
+    if not GITHUB_TOKEN or not GITHUB_REPO: 
+        return False, "Git not configured"
+    
     try:
         repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
         
-        # Determine if it's in forecasts subdirectory or main data directory
+        # Determine the path relative to data directory
         if "forecasts" in str(file_path.parent):
-            url = f"https://api.github.com/repos/{repo}/contents/data/forecasts/{file_path.name}"
+            # Forecasts are in data/forecasts/
+            relative_path = f"data/forecasts/{file_path.name}"
         else:
-            url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
+            # Regular data files are in data/
+            relative_path = f"data/{file_path.name}"
+        
+        url = f"https://api.github.com/repos/{repo}/contents/{relative_path}"
         
         # Read file content
         if file_path.exists():
             with open(file_path, "rb") as f: 
                 content = base64.b64encode(f.read()).decode()
         else: 
-            return False, "File missing"
+            return False, f"File missing: {file_path}"
         
         # Check if file exists in GitHub
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
         resp = requests.get(url, headers=headers)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         
@@ -405,20 +430,27 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
             "message": msg,
             "content": content,
             "branch": "main",
-            "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}
+            "committer": {
+                "name": GITHUB_USER, 
+                "email": GITHUB_EMAIL
+            }
         }
+        
         if sha: 
             payload["sha"] = sha
         
         # Upload to GitHub
         r = requests.put(url, headers=headers, json=payload)
-        if r.ok:
-            return True, "Synced to GitHub"
+        
+        if r.status_code == 201 or r.status_code == 200:
+            return True, f"Successfully pushed to GitHub: {relative_path}"
         else:
-            error_msg = r.json().get('message', 'Unknown error')
-            return False, f"GitHub sync failed: {error_msg}"
+            error_data = r.json()
+            error_msg = error_data.get('message', 'Unknown error')
+            return False, f"GitHub error: {error_msg}"
+            
     except Exception as e: 
-        return False, f"Error: {str(e)}"
+        return False, f"Error pushing to GitHub: {str(e)}"
 
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -606,6 +638,18 @@ if current_month_forecast > 0:
         </div>
     </div>
     """, unsafe_allow_html=True)
+else:
+    # Show placeholder if no forecast
+    st.sidebar.markdown(f"""
+    <div class="forecast-upload-box">
+        <div style="font-size:0.9rem; color:#64748b; margin-bottom:5px;">📊 Current Month Forecast</div>
+        <div style="font-size:1.2rem; color:#ef4444; font-weight:600;">Not Set</div>
+        <div style="font-size:0.9rem; color:#64748b; margin-top:5px;">{current_month_name} {current_time.year}</div>
+        <div style="font-size:0.8rem; color:#94a3b8; margin-top:8px;">
+            Manager can set forecast
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- MANAGER ONLY: FORECAST SETTING ---
 if user == "manager":
@@ -636,14 +680,28 @@ if user == "manager":
             format="%.3f"
         )
         
+        # Display GitHub status
+        if GITHUB_TOKEN and GITHUB_REPO:
+            st.info("✅ GitHub integration is active")
+        else:
+            st.warning("⚠️ GitHub not configured - forecasts will only be saved locally")
+        
         # Save forecast button
         if st.button("💾 Save Forecast", type="primary", use_container_width=True):
-            success, message = save_forecast_value(f_year, month_num, f_target)
-            if success:
-                st.success(message)
-                st.rerun()
+            if f_target > 0:
+                success, message = save_forecast_value(f_year, month_num, f_target)
+                if success:
+                    st.success(message)
+                    # Show file path
+                    file_path = get_forecast_file_path(f_year, month_num)
+                    st.info(f"File saved at: {file_path}")
+                    
+                    # Refresh the page to show updated forecast
+                    st.rerun()
+                else:
+                    st.error(message)
             else:
-                st.error(message)
+                st.warning("Please enter a forecast value greater than 0")
         
         # Show existing forecasts
         available_forecasts = list_available_forecasts()
@@ -653,6 +711,9 @@ if user == "manager":
             for year, month, forecast_val in available_forecasts[:5]:  # Show last 5
                 if forecast_val > 0:
                     st.markdown(f"**{calendar.month_name[month]} {year}:** {format_m3(forecast_val)}")
+        else:
+            st.markdown("---")
+            st.markdown("### No forecasts saved yet")
 
 st.sidebar.markdown("---")
 
@@ -1270,3 +1331,16 @@ st.sidebar.markdown("""
     <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color:#3b82f6; text-decoration:none;">Ashwin.IT@kbrc.com.kw</a>
 </div>
 """, unsafe_allow_html=True)
+
+# Debug information (only show if needed)
+if st.sidebar.checkbox("Show Debug Info", False):
+    st.sidebar.write("Data Directory:", DATA_DIR)
+    st.sidebar.write("Forecast Directory:", FORECAST_DIR)
+    st.sidebar.write("GitHub Token:", "Set" if GITHUB_TOKEN else "Not Set")
+    st.sidebar.write("GitHub Repo:", GITHUB_REPO if GITHUB_REPO else "Not Set")
+    
+    if FORECAST_DIR.exists():
+        forecast_files = list(FORECAST_DIR.glob("*.txt"))
+        st.sidebar.write(f"Forecast files: {len(forecast_files)}")
+        for f in forecast_files:
+            st.sidebar.write(f"- {f.name}")
