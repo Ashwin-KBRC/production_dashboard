@@ -253,58 +253,61 @@ def get_logs() -> pd.DataFrame:
     try: return pd.read_csv(LOG_FILE)
     except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
 
-# --- FORECAST FUNCTIONS (UPDATED) ---
+# --- FORECAST FUNCTIONS (UPDATED - TEXT FILE BASED) ---
 def get_forecast_file_path(year: int, month: int) -> Path:
-    """Get the forecast file path for a specific month and year"""
-    return FORECAST_DIR / f"forecast-{month:02d}-{year}.xlsx"
+    """Get the forecast text file path for a specific month and year"""
+    return FORECAST_DIR / f"forecast-{month:02d}-{year}.txt"
 
-def save_forecast_from_excel(year: int, month: int, excel_file) -> Tuple[bool, str]:
-    """Save forecast from uploaded Excel file"""
+def save_forecast_value(year: int, month: int, forecast_value: float) -> Tuple[bool, str]:
+    """Save forecast value as text file"""
     try:
-        df = pd.read_excel(excel_file)
-        # Check required columns
-        if 'forecast' not in df.columns:
-            return False, "Excel file must contain 'forecast' column"
-        
-        # Save to Excel file
         file_path = get_forecast_file_path(year, month)
-        df.to_excel(file_path, index=False)
+        with open(file_path, 'w') as f:
+            f.write(str(forecast_value))
+        
+        # Attempt to push to GitHub
+        if GITHUB_TOKEN and GITHUB_REPO:
+            success, message = attempt_git_push(file_path, f"Add/Update forecast for {calendar.month_name[month]} {year}")
+            if not success:
+                return False, f"Saved locally but GitHub push failed: {message}"
+        
         return True, f"Forecast saved for {calendar.month_name[month]} {year}"
     except Exception as e:
-        return False, f"Error processing file: {str(e)}"
+        return False, f"Error saving forecast: {str(e)}"
 
 def get_forecast(year: int, month: int) -> float:
-    """Get forecast value for specific month and year"""
+    """Get forecast value for specific month and year from text file"""
     file_path = get_forecast_file_path(year, month)
     if not file_path.exists():
         return 0.0
     
     try:
-        df = pd.read_excel(file_path)
-        if 'forecast' in df.columns and not df.empty:
-            return float(df['forecast'].iloc[0])
+        with open(file_path, 'r') as f:
+            content = f.read().strip()
+            return float(content)
     except Exception as e:
         print(f"Error reading forecast: {e}")
-    return 0.0
+        return 0.0
 
 def get_current_month_forecast() -> float:
     """Get forecast for current month"""
     now = get_kuwait_time()
     return get_forecast(now.year, now.month)
 
-def list_available_forecasts() -> List[Tuple[int, int]]:
-    """List all available forecasts"""
+def list_available_forecasts() -> List[Tuple[int, int, float]]:
+    """List all available forecasts with values"""
     forecasts = []
-    for file_path in FORECAST_DIR.glob("forecast-*.xlsx"):
+    for file_path in FORECAST_DIR.glob("forecast-*.txt"):
         try:
             parts = file_path.stem.split('-')
             if len(parts) == 3:
                 month = int(parts[1])
                 year = int(parts[2])
-                forecasts.append((year, month))
+                forecast_val = get_forecast(year, month)
+                forecasts.append((year, month, forecast_val))
         except:
             continue
-    return sorted(forecasts, reverse=True)
+    return sorted(forecasts, key=lambda x: (x[0], x[1]), reverse=True)
 
 def get_forecast_for_date_range(start_date: date, end_date: date) -> Dict[str, float]:
     """Get forecast values for a date range"""
@@ -378,18 +381,44 @@ def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
     if not GITHUB_TOKEN or not GITHUB_REPO: return False, "Git not configured"
     try:
         repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
-        url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
+        
+        # Determine if it's in forecasts subdirectory or main data directory
+        if "forecasts" in str(file_path.parent):
+            url = f"https://api.github.com/repos/{repo}/contents/data/forecasts/{file_path.name}"
+        else:
+            url = f"https://api.github.com/repos/{repo}/contents/data/{file_path.name}"
+        
+        # Read file content
         if file_path.exists():
-             with open(file_path, "rb") as f: content = base64.b64encode(f.read()).decode()
-        else: return False, "File missing"
+            with open(file_path, "rb") as f: 
+                content = base64.b64encode(f.read()).decode()
+        else: 
+            return False, "File missing"
+        
+        # Check if file exists in GitHub
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         resp = requests.get(url, headers=headers)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
-        payload = {"message": msg, "content": content, "branch": "main", "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}}
-        if sha: payload["sha"] = sha
+        
+        # Prepare payload
+        payload = {
+            "message": msg,
+            "content": content,
+            "branch": "main",
+            "committer": {"name": GITHUB_USER, "email": GITHUB_EMAIL}
+        }
+        if sha: 
+            payload["sha"] = sha
+        
+        # Upload to GitHub
         r = requests.put(url, headers=headers, json=payload)
-        return r.ok, "Synced" if r.ok else "Sync Failed"
-    except Exception as e: return False, str(e)
+        if r.ok:
+            return True, "Synced to GitHub"
+        else:
+            error_msg = r.json().get('message', 'Unknown error')
+            return False, f"GitHub sync failed: {error_msg}"
+    except Exception as e: 
+        return False, f"Error: {str(e)}"
 
 def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -566,21 +595,22 @@ current_month_forecast = get_forecast(current_time.year, current_time.month)
 current_month_name = calendar.month_name[current_time.month]
 
 if current_month_forecast > 0:
+    daily_target = calculate_daily_target(current_month_forecast, current_time.year, current_time.month)
     st.sidebar.markdown(f"""
     <div class="forecast-upload-box">
         <div style="font-size:0.9rem; color:#64748b; margin-bottom:5px;">📊 Current Month Forecast</div>
         <div style="font-size:1.8rem; font-weight:800; color:#3b82f6;">{format_m3(current_month_forecast)}</div>
         <div style="font-size:0.9rem; color:#64748b; margin-top:5px;">{current_month_name} {current_time.year}</div>
         <div style="font-size:0.8rem; color:#10b981; font-weight:600; margin-top:8px;">
-            Expected Average: {format_m3(calculate_daily_target(current_month_forecast, current_time.year, current_time.month))}/day
+            <strong>Expected Average: {format_m3(daily_target)}/day</strong>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- MANAGER ONLY: FORECAST UPLOAD ---
+# --- MANAGER ONLY: FORECAST SETTING ---
 if user == "manager":
     with st.sidebar.expander("🎯 Manager Forecast Controls", expanded=False):
-        st.markdown("### Upload Monthly Forecast")
+        st.markdown("### Set Monthly Forecast")
         
         # Year and month selection
         current_year = current_time.year
@@ -594,34 +624,35 @@ if user == "manager":
         
         month_num = list(calendar.month_name).index(f_month)
         
-        # File upload
-        uploaded_file = st.file_uploader("Upload Forecast Excel", 
-                                        type=["xlsx"],
-                                        key="forecast_uploader",
-                                        help="Upload Excel file with 'forecast' column containing the monthly target value")
+        # Get current forecast value if exists
+        current_val = get_forecast(f_year, month_num)
         
-        if uploaded_file is not None:
-            # Validate file name
-            expected_name = f"forecast-{month_num:02d}-{f_year}.xlsx"
-            if uploaded_file.name != expected_name:
-                st.warning(f"Please rename file to: {expected_name}")
+        # Forecast value input
+        f_target = st.number_input(
+            "Monthly Forecast Target (m³)", 
+            min_value=0.0, 
+            value=float(current_val) if current_val > 0 else 0.0,
+            step=100.0,
+            format="%.3f"
+        )
+        
+        # Save forecast button
+        if st.button("💾 Save Forecast", type="primary", use_container_width=True):
+            success, message = save_forecast_value(f_year, month_num, f_target)
+            if success:
+                st.success(message)
+                st.rerun()
             else:
-                # Save forecast
-                success, message = save_forecast_from_excel(f_year, month_num, uploaded_file)
-                if success:
-                    st.success(message)
-                    st.rerun()
-                else:
-                    st.error(message)
+                st.error(message)
         
         # Show existing forecasts
         available_forecasts = list_available_forecasts()
         if available_forecasts:
             st.markdown("---")
             st.markdown("### Existing Forecasts")
-            for year, month in available_forecasts[:5]:  # Show last 5
-                forecast_val = get_forecast(year, month)
-                st.markdown(f"**{calendar.month_name[month]} {year}:** {format_m3(forecast_val)}")
+            for year, month, forecast_val in available_forecasts[:5]:  # Show last 5
+                if forecast_val > 0:
+                    st.markdown(f"**{calendar.month_name[month]} {year}:** {format_m3(forecast_val)}")
 
 st.sidebar.markdown("---")
 
@@ -767,7 +798,7 @@ if mode == "Analytics":
                     <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({month_name})</div>
                     <div style="font-size:3rem; font-weight:800;">{monthly_target:,.0f} m³</div>
                     <div style="font-size:0.8rem; opacity:0.8; font-weight:600; color:#fbbf24;">
-                        Expected Average: {format_m3(expected_avg)}/day
+                        <strong>Expected Average: {format_m3(expected_avg)}/day</strong>
                     </div>
                 </div>
                 <div>
