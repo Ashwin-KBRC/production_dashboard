@@ -5,7 +5,7 @@ import requests
 import csv
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -15,1967 +15,1333 @@ import io
 import xlsxwriter
 import calendar
 from dateutil.relativedelta import relativedelta
-import json
 
 # ========================================
-# 1. ENTERPRISE PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION
 # ========================================
 st.set_page_config(
-    page_title="KBRC Executive Production Dashboard", 
+    page_title="KBRC Executive Dashboard", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'mailto:Ashwin.IT@kbrc.com.kw',
-        'Report a bug': 'mailto:Ashwin.IT@kbrc.com.kw',
-        'About': "Kuwait Building Readymix Company - Executive Production Dashboard v3.0"
-    }
+    initial_sidebar_state="expanded"
 )
 
 # ========================================
-# 2. ENTERPRISE SESSION STATE MANAGEMENT
+# 2. SESSION STATE & DARK MODE SETUP
 # ========================================
-class SessionStateManager:
-    """Centralized session state management"""
-    @staticmethod
-    def initialize():
-        defaults = {
-            "dark_mode": False,
-            "theme": "executive_blue",
-            "logged_in": False,
-            "username": None,
-            "selected_plant": "All Plants",
-            "date_range": "last_30_days",
-            "chart_style": "modern"
-        }
-        
-        for key, value in defaults.items():
-            if key not in st.session_state:
-                st.session_state[key] = value
-
-SessionStateManager.initialize()
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
 
 # ========================================
-# 3. PROFESSIONAL CSS & THEMING SYSTEM
+# 3. CSS STYLING (DYNAMIC LIGHT/DARK)
 # ========================================
-class ThemeManager:
-    """Enterprise theming system with light/dark modes"""
-    
-    @staticmethod
-    def get_current_theme():
-        theme_name = st.session_state.get("theme", "executive_blue")
-        is_dark = st.session_state.get("dark_mode", False)
-        
-        themes = {
-            "executive_blue": {
-                "light": {
-                    "primary": "#1e3a8a",
-                    "secondary": "#3b82f6",
-                    "accent": "#10b981",
-                    "background": "#f8fafc",
-                    "surface": "#ffffff",
-                    "text": "#1e293b",
-                    "text_secondary": "#64748b",
-                    "border": "#e2e8f0",
-                    "success": "#10b981",
-                    "warning": "#f59e0b",
-                    "error": "#ef4444"
-                },
-                "dark": {
-                    "primary": "#1e3a8a",
-                    "secondary": "#3b82f6",
-                    "accent": "#10b981",
-                    "background": "#0f172a",
-                    "surface": "#1e293b",
-                    "text": "#f1f5f9",
-                    "text_secondary": "#94a3b8",
-                    "border": "#334155",
-                    "success": "#10b981",
-                    "warning": "#f59e0b",
-                    "error": "#ef4444"
-                }
-            },
-            "professional_green": {
-                "light": {
-                    "primary": "#065f46",
-                    "secondary": "#10b981",
-                    "accent": "#3b82f6",
-                    "background": "#f0fdfa",
-                    "surface": "#ffffff",
-                    "text": "#064e3b",
-                    "text_secondary": "#6b7280",
-                    "border": "#d1d5db",
-                    "success": "#10b981",
-                    "warning": "#f59e0b",
-                    "error": "#ef4444"
-                },
-                "dark": {
-                    "primary": "#065f46",
-                    "secondary": "#10b981",
-                    "accent": "#3b82f6",
-                    "background": "#111827",
-                    "surface": "#1f2937",
-                    "text": "#f9fafb",
-                    "text_secondary": "#9ca3af",
-                    "border": "#374151",
-                    "success": "#10b981",
-                    "warning": "#f59e0b",
-                    "error": "#ef4444"
-                }
-            }
-        }
-        
-        theme = themes.get(theme_name, themes["executive_blue"])
-        return theme["dark"] if is_dark else theme["light"]
-    
-    @staticmethod
-    def inject_css():
-        """Inject professional, enterprise-grade CSS"""
-        theme = ThemeManager.get_current_theme()
-        
-        css = f"""
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-            
-            /* Base Styling */
-            html, body, [class*="css"], .stApp {{
-                font-family: 'Inter', sans-serif;
-                color: {theme['text']};
-                background-color: {theme['background']};
-            }}
-            
-            /* Hide Streamlit Branding */
-            footer {{visibility: hidden !important;}}
-            #MainMenu {{visibility: hidden;}}
-            header {{visibility: hidden !important;}}
-            .stAppDeployButton {{display: none !important;}}
-            
-            /* Sidebar Styling */
-            [data-testid="stSidebar"] {{
-                background-color: {theme['surface']};
-                border-right: 1px solid {theme['border']};
-            }}
-            
-            /* Professional Cards */
-            .enterprise-card {{
-                background: {theme['surface']};
-                border: 1px solid {theme['border']};
-                border-radius: 12px;
-                padding: 24px;
-                margin-bottom: 20px;
-                transition: all 0.3s ease;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            }}
-            
-            .enterprise-card:hover {{
-                box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-                border-color: {theme['secondary']};
-            }}
-            
-            .enterprise-card .card-title {{
-                font-size: 0.875rem;
-                font-weight: 600;
-                color: {theme['text_secondary']};
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                margin-bottom: 8px;
-            }}
-            
-            .enterprise-card .card-value {{
-                font-size: 2rem;
-                font-weight: 700;
-                color: {theme['text']};
-                margin-bottom: 4px;
-            }}
-            
-            .enterprise-card .card-subtitle {{
-                font-size: 0.875rem;
-                color: {theme['text_secondary']};
-            }}
-            
-            /* Hero Banner */
-            .hero-banner {{
-                background: linear-gradient(135deg, {theme['primary']} 0%, {theme['secondary']} 100%);
-                color: white;
-                padding: 40px;
-                border-radius: 16px;
-                margin-bottom: 30px;
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            }}
-            
-            /* Metric Highlight */
-            .metric-highlight {{
-                background: linear-gradient(135deg, {theme['success']}15 0%, {theme['accent']}15 100%);
-                border-left: 4px solid {theme['success']};
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-            }}
-            
-            /* Status Indicator */
-            .status-indicator {{
-                display: inline-flex;
-                align-items: center;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 0.75rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-            }}
-            
-            .status-online {{
-                background-color: {theme['success']}20;
-                color: {theme['success']};
-            }}
-            
-            .status-warning {{
-                background-color: {theme['warning']}20;
-                color: {theme['warning']};
-            }}
-            
-            .status-offline {{
-                background-color: {theme['error']}20;
-                color: {theme['error']};
-            }}
-            
-            /* Table Styling */
-            .data-table {{
-                border-radius: 8px;
-                overflow: hidden;
-                border: 1px solid {theme['border']};
-            }}
-            
-            /* Progress Bar */
-            .progress-container {{
-                height: 8px;
-                background-color: {theme['border']};
-                border-radius: 4px;
-                overflow: hidden;
-                margin: 8px 0;
-            }}
-            
-            .progress-bar {{
-                height: 100%;
-                background: linear-gradient(90deg, {theme['secondary']}, {theme['accent']});
-                border-radius: 4px;
-            }}
-            
-            /* Button Enhancements */
-            .stButton > button {{
-                border-radius: 8px;
-                font-weight: 600;
-                transition: all 0.2s ease;
-            }}
-            
-            .stButton > button:hover {{
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }}
-            
-            /* Tab Styling */
-            .stTabs [data-baseweb="tab-list"] {{
-                gap: 8px;
-                background-color: transparent;
-            }}
-            
-            .stTabs [data-baseweb="tab"] {{
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-weight: 600;
-                color: {theme['text_secondary']};
-                border: 1px solid transparent;
-            }}
-            
-            .stTabs [aria-selected="true"] {{
-                background-color: {theme['surface']};
-                border-color: {theme['border']};
-                color: {theme['primary']};
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }}
-        </style>
-        """
-        st.markdown(css, unsafe_allow_html=True)
-
-ThemeManager.inject_css()
-
-# ========================================
-# 4. ENTERPRISE DATA MANAGEMENT
-# ========================================
-class DataManager:
-    """Centralized data management system"""
-    
-    def __init__(self):
-        self.DATA_DIR = Path("data")
-        self.FORECAST_DIR = self.DATA_DIR / "forecasts"
-        self.CONFIG_FILE = self.DATA_DIR / "config.json"
-        self.setup_directories()
-        
-    def setup_directories(self):
-        """Create necessary directories"""
-        self.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.FORECAST_DIR.mkdir(parents=True, exist_ok=True)
-    
-    def save_config(self, config: Dict):
-        """Save configuration to JSON"""
-        with open(self.CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=2)
-    
-    def load_config(self) -> Dict:
-        """Load configuration from JSON"""
-        if self.CONFIG_FILE.exists():
-            with open(self.CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        return {}
-
-# Initialize Data Manager
-data_manager = DataManager()
-
-# ========================================
-# 5. AUTHENTICATION & SECURITY
-# ========================================
-class AuthManager:
-    """Enterprise authentication system"""
-    
-    def __init__(self):
-        self.LOG_FILE = data_manager.DATA_DIR / "audit_log.csv"
-        self.setup_logs()
-        
-        # Load users from secrets/config
-        self.users = self.load_users()
-    
-    def setup_logs(self):
-        """Initialize audit logs"""
-        if not self.LOG_FILE.exists():
-            with open(self.LOG_FILE, 'w', newline='') as f:
-                csv.writer(f).writerow(["timestamp", "user", "ip", "event", "details"])
-    
-    def load_users(self) -> Dict[str, str]:
-        """Load users from configuration"""
-        default_users = {
-            "admin": hashlib.sha256("kbrc@2024".encode()).hexdigest(),
-            "executive": hashlib.sha256("executive@kbrc".encode()).hexdigest(),
-            "manager": hashlib.sha256("manager@kbrc".encode()).hexdigest(),
-            "analyst": hashlib.sha256("analyst@kbrc".encode()).hexdigest()
-        }
-        
-        # Load additional users from secrets
-        try:
-            secrets = dict(st.secrets)
-            if "USERS" in secrets:
-                default_users.update(secrets["USERS"])
-        except:
-            pass
-        
-        return default_users
-    
-    def authenticate(self, username: str, password: str) -> Tuple[bool, str]:
-        """Authenticate user with audit logging"""
-        if not username or not password:
-            self.log_event("system", "AUTH_FAILED", "Empty credentials")
-            return False, "Please enter credentials"
-        
-        if username in self.users:
-            password_hash = hashlib.sha256(password.encode()).hexdigest()
-            if password_hash == self.users[username]:
-                self.log_event(username, "LOGIN_SUCCESS", "User authenticated")
-                return True, "Authentication successful"
-        
-        self.log_event(username, "LOGIN_FAILED", "Invalid credentials")
-        return False, "Invalid username or password"
-    
-    def log_event(self, user: str, event: str, details: str = ""):
-        """Log security event"""
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        # Note: In production, get actual IP from request
-        ip_address = "127.0.0.1"
-        
-        with open(self.LOG_FILE, 'a', newline='') as f:
-            csv.writer(f).writerow([timestamp, user, ip_address, event, details])
-
-# Initialize Auth Manager
-auth_manager = AuthManager()
-
-# ========================================
-# 6. UTILITY FUNCTIONS
-# ========================================
-class Utilities:
-    """Collection of utility functions"""
-    
-    @staticmethod
-    def get_kuwait_time() -> datetime:
-        """Get current time in Kuwait (UTC+3)"""
-        return datetime.now(timezone.utc) + timedelta(hours=3)
-    
-    @staticmethod
-    def format_volume(value: float) -> str:
-        """Format volume with appropriate unit"""
-        if value >= 1000000:
-            return f"{value/1000000:.2f}M m³"
-        elif value >= 1000:
-            return f"{value/1000:.2f}K m³"
-        return f"{value:,.2f} m³"
-    
-    @staticmethod
-    def format_currency(value: float) -> str:
-        """Format currency value"""
-        return f"KWD {value:,.2f}"
-    
-    @staticmethod
-    def calculate_percentage_change(current: float, previous: float) -> Tuple[float, str]:
-        """Calculate percentage change with trend indicator"""
-        if previous == 0:
-            return 0, "neutral"
-        
-        change = ((current - previous) / previous) * 100
-        
-        if change > 5:
-            trend = "positive"
-        elif change < -5:
-            trend = "negative"
-        else:
-            trend = "neutral"
-        
-        return change, trend
-    
-    @staticmethod
-    def get_date_ranges() -> Dict[str, Tuple[date, date]]:
-        """Get predefined date ranges"""
-        today = Utilities.get_kuwait_time().date()
-        
-        return {
-            "today": (today, today),
-            "yesterday": (today - timedelta(days=1), today - timedelta(days=1)),
-            "last_7_days": (today - timedelta(days=7), today),
-            "last_30_days": (today - timedelta(days=30), today),
-            "this_month": (today.replace(day=1), today),
-            "last_month": (
-                (today.replace(day=1) - timedelta(days=1)).replace(day=1),
-                today.replace(day=1) - timedelta(days=1)
-            ),
-            "this_quarter": (
-                today.replace(month=((today.month-1)//3)*3+1, day=1),
-                today
-            )
-        }
-
-# ========================================
-# 7. FORECAST MANAGEMENT SYSTEM
-# ========================================
-class ForecastManager:
-    """Enterprise forecast management system"""
-    
-    def __init__(self):
-        self.forecast_dir = data_manager.FORECAST_DIR
-    
-    def save_forecast(self, year: int, month: int, value: float) -> Tuple[bool, str]:
-        """Save monthly forecast"""
-        try:
-            file_path = self.forecast_dir / f"forecast_{year}_{month:02d}.json"
-            forecast_data = {
-                "year": year,
-                "month": month,
-                "value": value,
-                "updated_at": Utilities.get_kuwait_time().isoformat(),
-                "updated_by": st.session_state.get("username", "system")
-            }
-            
-            with open(file_path, 'w') as f:
-                json.dump(forecast_data, f, indent=2)
-            
-            return True, "Forecast saved successfully"
-        except Exception as e:
-            return False, f"Error saving forecast: {str(e)}"
-    
-    def get_forecast(self, year: int, month: int) -> float:
-        """Get monthly forecast"""
-        try:
-            file_path = self.forecast_dir / f"forecast_{year}_{month:02d}.json"
-            if file_path.exists():
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                    return data.get("value", 0.0)
-        except:
-            pass
-        return 0.0
-    
-    def get_all_forecasts(self) -> List[Dict]:
-        """Get all available forecasts"""
-        forecasts = []
-        for file_path in self.forecast_dir.glob("forecast_*.json"):
-            try:
-                with open(file_path, 'r') as f:
-                    forecasts.append(json.load(f))
-            except:
-                continue
-        return sorted(forecasts, key=lambda x: (x["year"], x["month"]), reverse=True)
-
-# Initialize Forecast Manager
-forecast_manager = ForecastManager()
-
-# ========================================
-# 8. DATA PROCESSING ENGINE
-# ========================================
-class DataProcessor:
-    """Data processing and analysis engine"""
-    
-    @staticmethod
-    def process_uploaded_file(uploaded_file, selected_date: date) -> pd.DataFrame:
-        """Process uploaded Excel file"""
-        try:
-            df = pd.read_excel(uploaded_file)
-            
-            # Standardize column names
-            df.columns = [col.strip().title() for col in df.columns]
-            
-            # Required columns
-            required = ["Plant", "Production For The Day", "Accumulative Production"]
-            
-            # Check required columns
-            missing = [col for col in required if col not in df.columns]
-            if missing:
-                raise ValueError(f"Missing required columns: {missing}")
-            
-            # Add date column
-            df["Date"] = selected_date
-            
-            # Convert numeric columns
-            df["Production For The Day"] = pd.to_numeric(df["Production For The Day"], errors="coerce")
-            df["Accumulative Production"] = pd.to_numeric(df["Accumulative Production"], errors="coerce")
-            
-            return df
-            
-        except Exception as e:
-            raise ValueError(f"Error processing file: {str(e)}")
-    
-    @staticmethod
-    def analyze_daily_data(df: pd.DataFrame) -> Dict:
-        """Analyze daily production data"""
-        analysis = {
-            "total_production": df["Production For The Day"].sum(),
-            "average_production": df["Production For The Day"].mean(),
-            "top_plant": df.loc[df["Production For The Day"].idxmax(), "Plant"] if not df.empty else "N/A",
-            "top_value": df["Production For The Day"].max() if not df.empty else 0,
-            "plant_count": df["Plant"].nunique(),
-            "data_points": len(df)
-        }
-        return analysis
-    
-    @staticmethod
-    def generate_insights(df: pd.DataFrame, forecast: float = 0) -> List[str]:
-        """Generate business insights"""
-        insights = []
-        
-        if df.empty:
-            return ["No data available for analysis"]
-        
-        total = df["Production For The Day"].sum()
-        avg = df["Production For The Day"].mean()
-        
-        # Basic insights
-        insights.append(f"**Total Production:** {Utilities.format_volume(total)}")
-        
-        if forecast > 0:
-            variance = total - forecast
-            variance_pct = (variance / forecast * 100) if forecast > 0 else 0
-            if variance > 0:
-                insights.append(f"**Above Forecast:** +{Utilities.format_volume(abs(variance))} ({variance_pct:.1f}%)")
-            else:
-                insights.append(f"**Below Forecast:** -{Utilities.format_volume(abs(variance))} ({abs(variance_pct):.1f}%)")
-        
-        # Top performer insight
-        top_plant = df.loc[df["Production For The Day"].idxmax()]
-        insights.append(f"**Top Performer:** {top_plant['Plant']} ({Utilities.format_volume(top_plant['Production For The Day'])})")
-        
-        # Efficiency insight
-        if avg > 0:
-            insights.append(f"**Average Plant Output:** {Utilities.format_volume(avg)}")
-        
-        return insights
-
-# ========================================
-# 9. VISUALIZATION ENGINE
-# ========================================
-class VisualizationEngine:
-    """Professional visualization engine"""
-    
-    @staticmethod
-    def create_metric_card(title: str, value: str, subtitle: str = "", trend: str = "neutral"):
-        """Create a professional metric card"""
-        theme = ThemeManager.get_current_theme()
-        
-        if trend == "positive":
-            trend_icon = "📈"
-            trend_color = theme["success"]
-        elif trend == "negative":
-            trend_icon = "📉"
-            trend_color = theme["error"]
-        else:
-            trend_icon = "📊"
-            trend_color = theme["text_secondary"]
-        
-        html = f"""
-        <div class="enterprise-card">
-            <div class="card-title">{title}</div>
-            <div class="card-value">{trend_icon} {value}</div>
-            <div class="card-subtitle" style="color: {trend_color}">{subtitle}</div>
-        </div>
-        """
-        st.markdown(html, unsafe_allow_html=True)
-    
-    @staticmethod
-    def create_production_chart(df: pd.DataFrame, title: str = "Production Overview"):
-        """Create production chart"""
-        theme = ThemeManager.get_current_theme()
-        
-        fig = go.Figure()
-        
-        # Add bar chart for daily production
-        fig.add_trace(go.Bar(
-            x=df["Date"],
-            y=df["Total Production"],
-            name="Daily Production",
-            marker_color=theme["secondary"],
-            opacity=0.8
-        ))
-        
-        # Add line for trend
-        if len(df) > 1:
-            fig.add_trace(go.Scatter(
-                x=df["Date"],
-                y=df["Total Production"].rolling(window=3, center=True).mean(),
-                name="Trend",
-                mode="lines",
-                line=dict(color=theme["accent"], width=3),
-                opacity=0.7
-            ))
-        
-        fig.update_layout(
-            title=dict(
-                text=title,
-                font=dict(size=18, color=theme["text"])
-            ),
-            xaxis=dict(
-                title="Date",
-                gridcolor=theme["border"],
-                tickformat="%b %d"
-            ),
-            yaxis=dict(
-                title="Production Volume (m³)",
-                gridcolor=theme["border"]
-            ),
-            plot_bgcolor=theme["surface"],
-            paper_bgcolor=theme["background"],
-            font=dict(color=theme["text"]),
-            hovermode="x unified",
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        
-        return fig
-
-# ========================================
-# 10. ENTERPRISE LOGIN SCREEN
-# ========================================
-def render_login_screen():
-    """Render professional login screen"""
-    
-    # Create centered layout
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
-        
-        # Login Card
-        theme = ThemeManager.get_current_theme()
-        
-        st.markdown(f"""
-        <div style="
-            background: {theme['surface']};
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-            border: 1px solid {theme['border']};
-            text-align: center;
-        ">
-            <div style="margin-bottom: 30px;">
-                <h1 style="
-                    color: {theme['primary']};
-                    font-size: 2rem;
-                    font-weight: 700;
-                    margin-bottom: 8px;
-                ">KBRC</h1>
-                <p style="
-                    color: {theme['text_secondary']};
-                    font-size: 0.9rem;
-                    letter-spacing: 3px;
-                    text-transform: uppercase;
-                    margin-bottom: 30px;
-                ">EXECUTIVE DASHBOARD</p>
-            </div>
-            
-            <div style="
-                background: linear-gradient(135deg, {theme['primary']}15 0%, {theme['secondary']}15 100%);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 30px;
-            ">
-                <p style="
-                    color: {theme['text']};
-                    font-size: 0.9rem;
-                    margin: 0;
-                ">Secure access to production analytics and management</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Login Form
-        with st.form("login_form"):
-            username = st.text_input(
-                "Username",
-                placeholder="Enter your username"
-            )
-            
-            password = st.text_input(
-                "Password",
-                type="password",
-                placeholder="Enter your password"
-            )
-            
-            submit = st.form_submit_button(
-                "Access Dashboard",
-                type="primary",
-                use_container_width=True
-            )
-            
-            if submit:
-                authenticated, message = auth_manager.authenticate(username, password)
-                if authenticated:
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = username
-                    st.success("Login successful!")
-                    st.rerun()
-                else:
-                    st.error(message)
-        
-        # Footer
-        st.markdown("""
-        <div style="
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            text-align: center;
-        ">
-            <p style="
-                color: #64748b;
-                font-size: 0.8rem;
-                margin: 0;
-            ">
-                Need assistance? Contact IT Support
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-# ========================================
-# 11. MAIN APPLICATION
-# ========================================
-
-# Check authentication
-if not st.session_state.get("logged_in", False):
-    render_login_screen()
-    st.stop()
-
-# ========================================
-# 12. SIDEBAR CONFIGURATION
-# ========================================
-with st.sidebar:
-    # User Profile Section
-    theme = ThemeManager.get_current_theme()
-    
-    st.markdown(f"""
-    <div style="
-        padding: 20px;
-        border-radius: 12px;
-        background: {theme['surface']};
-        border: 1px solid {theme['border']};
-        margin-bottom: 20px;
-    ">
-        <div style="
-            display: flex;
-            align-items: center;
-            margin-bottom: 16px;
-        ">
-            <div style="
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, {theme['primary']}, {theme['secondary']});
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-right: 12px;
-                color: white;
-                font-weight: 600;
-            ">
-                {st.session_state['username'][0].upper()}
-            </div>
-            <div>
-                <div style="
-                    color: {theme['text']};
-                    font-weight: 600;
-                    font-size: 1rem;
-                ">
-                    {st.session_state['username'].title()}
-                </div>
-                <div style="
-                    color: {theme['text_secondary']};
-                    font-size: 0.8rem;
-                ">
-                    {Utilities.get_kuwait_time().strftime('%I:%M %p')}
-                </div>
-            </div>
-        </div>
-        
-        <div style="display: flex; align-items: center;">
-            <span class="status-indicator status-online">Online</span>
-            <div style="flex-grow: 1;"></div>
-            <span style="
-                color: {theme['text_secondary']};
-                font-size: 0.8rem;
-            ">
-                Kuwait Time
-            </span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Navigation
-    st.markdown("### Navigation")
-    
-    # Define navigation based on user role
-    user_role = st.session_state["username"]
-    
-    if user_role == "admin":
-        pages = ["Dashboard", "Production Analytics", "Forecast Management", 
-                "Data Management", "User Management", "System Settings", "Audit Logs"]
-    elif user_role == "executive":
-        pages = ["Dashboard", "Production Analytics", "Forecast Management", "Reports"]
-    elif user_role == "manager":
-        pages = ["Dashboard", "Production Analytics", "Data Upload", "Forecast Management"]
+def inject_css():
+    """
+    Injects professional CSS based on the current Light/Dark mode state.
+    Handles all UI elements including Cards, Tables, Tabs, and Text.
+    """
+    if st.session_state["dark_mode"]:
+        # DARK MODE PALETTE
+        bg_color = "#0f172a"          # Slate 900
+        text_color = "#f8fafc"        # Slate 50
+        card_bg = "#1e293b"           # Slate 800
+        border_color = "#334155"      # Slate 700
+        sidebar_bg = "#111827"        # Gray 900
+        secondary_text = "#94a3b8"    # Slate 400
     else:
-        pages = ["Dashboard", "Production Analytics"]
-    
-    selected_page = st.radio(
-        "",
-        pages,
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    
-    # Quick Stats
-    st.markdown("### Quick Stats")
-    
-    # Placeholder for quick stats - in production, these would be loaded from data
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Today's Target", "25,000 m³")
-    with col2:
-        st.metric("Achieved", "23,456 m³", "-6.2%")
-    
-    st.markdown("---")
-    
-    # Theme Controls
-    st.markdown("### Appearance")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        dark_mode = st.toggle("Dark Mode", value=st.session_state.get("dark_mode", False))
-        if dark_mode != st.session_state.get("dark_mode"):
-            st.session_state["dark_mode"] = dark_mode
-            st.rerun()
-    
-    with col2:
-        theme_option = st.selectbox(
-            "Theme",
-            ["Executive Blue", "Professional Green"],
-            index=0 if st.session_state.get("theme") == "executive_blue" else 1,
-            label_visibility="collapsed"
-        )
-        theme_key = "executive_blue" if theme_option == "Executive Blue" else "professional_green"
-        if theme_key != st.session_state.get("theme"):
-            st.session_state["theme"] = theme_key
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Logout Button
-    if st.button("Logout", use_container_width=True):
-        auth_manager.log_event(st.session_state["username"], "LOGOUT", "User logged out")
-        st.session_state.clear()
-        st.rerun()
-    
-    # Footer
-    st.markdown("""
-    <div style="
-        margin-top: 40px;
-        padding-top: 20px;
-        border-top: 1px solid #e2e8f0;
-    ">
-        <p style="
-            color: #64748b;
-            font-size: 0.75rem;
-            margin: 0 0 8px 0;
-        ">
-            <strong>Kuwait Building Readymix Co.</strong>
-        </p>
-        <p style="
-            color: #64748b;
-            font-size: 0.7rem;
-            margin: 0;
-            line-height: 1.4;
-        ">
-            Version 3.0 • © 2024 KBRC<br>
-            IT Support: Ashwin.IT@kbrc.com.kw
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        # LIGHT MODE PALETTE
+        bg_color = "#f8fafc"          # Slate 50
+        text_color = "#1e293b"        # Slate 800
+        card_bg = "#ffffff"           # White
+        border_color = "#e2e8f0"      # Slate 200
+        sidebar_bg = "#ffffff"        # White
+        secondary_text = "#64748b"    # Slate 500
 
-# ========================================
-# 13. PAGE ROUTING
-# ========================================
-
-# Re-inject CSS after theme changes
-ThemeManager.inject_css()
-
-if selected_page == "Dashboard":
-    # Dashboard Page
-    st.title("Executive Dashboard")
-    
-    # Welcome Message
-    current_time = Utilities.get_kuwait_time()
-    greeting = "Good Morning" if current_time.hour < 12 else "Good Afternoon" if current_time.hour < 18 else "Good Evening"
-    
     st.markdown(f"""
-    <div style="margin-bottom: 30px;">
-        <h1 style="font-size: 2.5rem; margin-bottom: 8px;">{greeting}, {st.session_state['username'].title()}!</h1>
-        <p style="color: #64748b; font-size: 1.1rem;">
-            Welcome to the KBRC Executive Production Dashboard
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # KPI Cards
-    st.markdown("### Key Performance Indicators")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        VisualizationEngine.create_metric_card(
-            "Total Production",
-            "245,678 m³",
-            "↑ 12.5% from last month",
-            "positive"
-        )
-    
-    with col2:
-        VisualizationEngine.create_metric_card(
-            "Daily Average",
-            "8,189 m³",
-            "↓ 3.2% from target",
-            "negative"
-        )
-    
-    with col3:
-        VisualizationEngine.create_metric_card(
-            "Plant Efficiency",
-            "94.2%",
-            "Within optimal range",
-            "neutral"
-        )
-    
-    with col4:
-        VisualizationEngine.create_metric_card(
-            "Forecast Variance",
-            "+2.3%",
-            "Above monthly target",
-            "positive"
-        )
-    
-    # Charts Section
-    st.markdown("### Production Overview")
-    
-    # Sample data for demonstration
-    dates = pd.date_range(end=current_time, periods=30, freq='D')
-    sample_data = pd.DataFrame({
-        'Date': dates,
-        'Total Production': np.random.randint(7000, 9000, 30) + np.random.randn(30) * 500
-    })
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Production Trend Chart
-        fig = VisualizationEngine.create_production_chart(sample_data, "30-Day Production Trend")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Plant Performance
-        plant_data = pd.DataFrame({
-            'Plant': ['Plant A', 'Plant B', 'Plant C', 'Plant D', 'Plant E'],
-            'Production': np.random.randint(1500, 3000, 5)
-        })
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
-        st.markdown("#### Top Performing Plants")
-        for _, row in plant_data.iterrows():
-            st.metric(row['Plant'], Utilities.format_volume(row['Production']))
-        
-        st.markdown("---")
-        st.markdown("#### System Status")
-        st.markdown("✅ **All systems operational**")
-        st.markdown("📊 **Data updated:** Today, 08:00")
-        st.markdown("🔒 **Security:** High")
-    
-    # Recent Activity
-    st.markdown("### Recent Activity")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="enterprise-card">
-            <div class="card-title">Latest Data Upload</div>
-            <div class="card-value">Today, 07:45</div>
-            <div class="card-subtitle">By Production Manager</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="enterprise-card">
-            <div class="card-title">Next Forecast Review</div>
-            <div class="card-value">Tomorrow, 10:00</div>
-            <div class="card-subtitle">Monthly Planning Meeting</div>
-        </div>
-        """, unsafe_allow_html=True)
+        html, body, [class*="css"], .stApp {{
+            font-family: 'Inter', sans-serif;
+            color: {text_color};
+            background-color: {bg_color};
+        }}
 
-elif selected_page == "Production Analytics":
-    st.title("Production Analytics")
+        /* HIDE DEFAULT STREAMLIT BRANDING */
+        footer {{visibility: hidden !important;}}
+        #MainMenu {{visibility: hidden;}}
+        header {{visibility: hidden !important;}}
+        .stAppDeployButton {{display: none !important;}}
+        
+        /* SIDEBAR STYLING */
+        [data-testid="stSidebar"] {{
+            background-color: {sidebar_bg};
+            border-right: 1px solid {border_color};
+        }}
+        [data-testid="stSidebarCollapseButton"] {{display: none !important;}}
+
+        /* PROFESSIONAL METRIC CARDS */
+        .metric-card {{
+            background: {card_bg};
+            border: 1px solid {border_color};
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: {text_color};
+        }}
+        .metric-card:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: #3b82f6;
+        }}
+        
+        /* NEW TOTAL PRODUCTION BIG BOX */
+        .total-production-box {{
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }}
+        
+        /* HERO BANNER GRADIENT */
+        .hero-banner {{
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }}
+        
+        /* CUSTOM TAB STYLING */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 10px;
+            background-color: transparent;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            border-radius: 6px;
+            color: {secondary_text};
+            font-weight: 600;
+            padding: 10px 20px;
+        }}
+        .stTabs [aria-selected="true"] {{
+            background-color: {card_bg};
+            border: 1px solid {border_color};
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }}
+
+        /* DATAFRAME & TABLE STYLING */
+        .stDataFrame {{ border: 1px solid {border_color}; border-radius: 8px; overflow: hidden; }}
+        
+        /* HEADERS */
+        h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; font-weight: 700; }}
+        
+        /* INSIGHT BOX */
+        .insight-box {{
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: {text_color};
+        }}
+
+        /* LEADERBOARD BOXES */
+        .leaderboard-box {{
+            background-color: {card_bg};
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left-width: 5px;
+            border-left-style: solid;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }}
+        .leaderboard-box:hover {{
+            transform: scale(1.01);
+        }}
+        .lb-rank {{ font-size: 1.1em; font-weight: 700; opacity: 0.8; }}
+        .lb-name {{ font-weight: 600; font-size: 1.05em; margin-left: 10px; }}
+        .lb-val {{ font-weight: 800; font-size: 1.1em; }}
+        
+        /* FORECAST UPLOAD BOX */
+        .forecast-upload-box {{
+            background-color: {card_bg};
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px dashed {border_color};
+            margin-bottom: 20px;
+            text-align: center;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+inject_css()
+
+# ========================================
+# 4. SETUP & AUTHENTICATION
+# ========================================
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = DATA_DIR / "access_logs.csv"
+FORECAST_DIR = DATA_DIR / "forecasts"
+# Ensure forecasts directory exists
+FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+REQUIRED_COLS = ["Plant", "Production for the Day", "Accumulative Production"]
+
+# CONFIGURATION SECRETS
+SECRETS = {}
+try: SECRETS = dict(st.secrets)
+except: SECRETS = {}
+
+GITHUB_TOKEN = SECRETS.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = SECRETS.get("GITHUB_REPO") or os.getenv("GITHUB_REPO")
+GITHUB_USER = SECRETS.get("GITHUB_USER") or os.getenv("GITHUB_USER", "streamlit-bot")
+GITHUB_EMAIL = SECRETS.get("GITHUB_EMAIL") or os.getenv("GITHUB_EMAIL", "streamlit@example.com")
+
+_default_users = {
+    "admin": hashlib.sha256("kbrc123".encode()).hexdigest(),
+    "manager": hashlib.sha256("sjk@2025".encode()).hexdigest(),
+    "production": hashlib.sha256("Production@123".encode()).hexdigest()
+}
+
+USERS: Dict[str, str] = _default_users.copy()
+if "USERS" in SECRETS and isinstance(SECRETS["USERS"], dict):
+    for k, v in SECRETS["USERS"].items():
+        USERS[k] = v
+
+# ========================================
+# 5. LOGIC & UTILITY FUNCTIONS
+# ========================================
+def get_kuwait_time():
+    """Returns current time in Kuwait (UTC+3)"""
+    return datetime.now(timezone.utc) + timedelta(hours=3)
+
+def get_greeting():
+    h = get_kuwait_time().hour
+    if h < 12: return "Good Morning"
+    elif 12 <= h < 18: return "Good Afternoon"
+    else: return "Good Evening"
+
+def format_m3(value):
+    """Standardized formatting for Cubic Meters"""
+    return f"{value:,.3f} m³"
+
+def init_logs():
+    if not LOG_FILE.exists():
+        with open(LOG_FILE, 'w', newline='') as f:
+            csv.writer(f).writerow(["Timestamp", "User", "Event"])
+
+def log_event(username: str, event: str):
+    init_logs()
+    try:
+        # Use Kuwait Time for logging
+        ts = get_kuwait_time().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, 'a', newline='') as f:
+            csv.writer(f).writerow([ts, username, event])
+    except: pass
+
+def get_logs() -> pd.DataFrame:
+    init_logs()
+    try: return pd.read_csv(LOG_FILE)
+    except: return pd.DataFrame(columns=["Timestamp", "User", "Event"])
+
+# --- FORECAST FUNCTIONS (UPDATED - TEXT FILE BASED) ---
+def get_forecast_file_path(year: int, month: int) -> Path:
+    """Get the forecast text file path for a specific month and year"""
+    # Ensure forecasts directory exists
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+    return FORECAST_DIR / f"forecast-{month:02d}-{year}.txt"
+
+def save_forecast_value(year: int, month: int, forecast_value: float) -> Tuple[bool, str]:
+    """Save forecast value as text file"""
+    try:
+        # Ensure forecasts directory exists
+        FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+        
+        file_path = get_forecast_file_path(year, month)
+        with open(file_path, 'w') as f:
+            f.write(str(forecast_value))
+        
+        st.info(f"Forecast saved locally at: {file_path}")
+        
+        # Attempt to push to GitHub
+        if GITHUB_TOKEN and GITHUB_REPO:
+            success, message = attempt_git_push(file_path, f"Add/Update forecast for {calendar.month_name[month]} {year}")
+            if success:
+                return True, f"Forecast saved for {calendar.month_name[month]} {year} and pushed to GitHub"
+            else:
+                return False, f"Saved locally but GitHub push failed: {message}"
+        else:
+            return True, f"Forecast saved locally for {calendar.month_name[month]} {year} (GitHub not configured)"
+    except Exception as e:
+        return False, f"Error saving forecast: {str(e)}"
+
+def get_forecast(year: int, month: int) -> float:
+    """Get forecast value for specific month and year from text file"""
+    try:
+        file_path = get_forecast_file_path(year, month)
+        if not file_path.exists():
+            return 0.0
+        
+        with open(file_path, 'r') as f:
+            content = f.read().strip()
+            if content:
+                return float(content)
+            else:
+                return 0.0
+    except Exception as e:
+        print(f"Error reading forecast: {e}")
+        return 0.0
+
+def get_current_month_forecast() -> float:
+    """Get forecast for current month"""
+    now = get_kuwait_time()
+    return get_forecast(now.year, now.month)
+
+def list_available_forecasts() -> List[Tuple[int, int, float]]:
+    """List all available forecasts with values"""
+    forecasts = []
+    # Ensure directory exists
+    FORECAST_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Date Range Selector
-    date_ranges = Utilities.get_date_ranges()
-    selected_range = st.selectbox(
-        "Select Date Range",
-        list(date_ranges.keys()),
-        format_func=lambda x: x.replace("_", " ").title(),
-        index=3  # Default to last_30_days
+    for file_path in FORECAST_DIR.glob("forecast-*.txt"):
+        try:
+            parts = file_path.stem.split('-')
+            if len(parts) == 3:
+                month = int(parts[1])
+                year = int(parts[2])
+                forecast_val = get_forecast(year, month)
+                forecasts.append((year, month, forecast_val))
+        except:
+            continue
+    return sorted(forecasts, key=lambda x: (x[0], x[1]), reverse=True)
+
+def get_forecast_for_date_range(start_date: date, end_date: date) -> Dict[str, float]:
+    """Get forecast values for a date range"""
+    forecasts = {}
+    current = start_date.replace(day=1)
+    
+    while current <= end_date:
+        forecast_val = get_forecast(current.year, current.month)
+        month_key = f"{current.year}-{current.month:02d}"
+        forecasts[month_key] = forecast_val
+        current += relativedelta(months=1)
+    
+    return forecasts
+
+def calculate_daily_target(monthly_forecast: float, year: int, month: int) -> float:
+    """Calculate daily target based on monthly forecast"""
+    days_in_month = calendar.monthrange(year, month)[1]
+    if days_in_month > 0 and monthly_forecast > 0:
+        return monthly_forecast / days_in_month
+    return 0.0
+
+def check_credentials(username: str, password: str) -> bool:
+    if not username: return False
+    user = username.strip()
+    if user in USERS:
+        v = hashlib.sha256(password.encode()).hexdigest() == USERS[user]
+        log_event(user, "Login Success" if v else "Login Failed")
+        return v
+    return False
+
+def save_csv(df: pd.DataFrame, date_obj: date, overwrite: bool = False) -> Path:
+    fname = f"{date_obj.strftime('%Y-%m-%d')}.csv"
+    p = DATA_DIR / fname
+    if p.exists() and not overwrite: raise FileExistsError(f"{fname} exists.")
+    df.to_csv(p, index=False, float_format="%.3f")
+    return p
+
+def list_saved_dates() -> List[str]:
+    """List all saved dates, filtering only valid YYYY-MM-DD format files"""
+    valid_dates = []
+    for p in DATA_DIR.glob("*.csv"):
+        if "access_logs" in p.name or p.parent == FORECAST_DIR:
+            continue
+        
+        # Extract date from filename
+        date_str = p.name.replace(".csv", "")
+        
+        # Validate YYYY-MM-DD format
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+            valid_dates.append(date_str)
+        except ValueError:
+            # Skip files that don't match the date format
+            continue
+    
+    return sorted(valid_dates, reverse=True)
+
+def load_saved(date_str: str) -> pd.DataFrame:
+    p = DATA_DIR / f"{date_str}.csv"
+    if not p.exists(): raise FileNotFoundError("File missing")
+    return pd.read_csv(p)
+
+def delete_saved(date_str: str) -> bool:
+    p = DATA_DIR / f"{date_str}.csv"
+    if p.exists():
+        p.unlink()
+        return True
+    return False
+
+def attempt_git_push(file_path: Path, msg: str) -> Tuple[bool, str]:
+    if not GITHUB_TOKEN or not GITHUB_REPO: 
+        return False, "Git not configured"
+    
+    try:
+        repo = GITHUB_REPO.strip().replace("https://github.com/", "").replace(".git", "")
+        
+        # Determine the path relative to data directory
+        if "forecasts" in str(file_path.parent):
+            # Forecasts are in data/forecasts/
+            relative_path = f"data/forecasts/{file_path.name}"
+        else:
+            # Regular data files are in data/
+            relative_path = f"data/{file_path.name}"
+        
+        url = f"https://api.github.com/repos/{repo}/contents/{relative_path}"
+        
+        # Read file content
+        if file_path.exists():
+            with open(file_path, "rb") as f: 
+                content = base64.b64encode(f.read()).decode()
+        else: 
+            return False, f"File missing: {file_path}"
+        
+        # Check if file exists in GitHub
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        resp = requests.get(url, headers=headers)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+        
+        # Prepare payload
+        payload = {
+            "message": msg,
+            "content": content,
+            "branch": "main",
+            "committer": {
+                "name": GITHUB_USER, 
+                "email": GITHUB_EMAIL
+            }
+        }
+        
+        if sha: 
+            payload["sha"] = sha
+        
+        # Upload to GitHub
+        r = requests.put(url, headers=headers, json=payload)
+        
+        if r.status_code == 201 or r.status_code == 200:
+            return True, f"Successfully pushed to GitHub: {relative_path}"
+        else:
+            error_data = r.json()
+            error_msg = error_data.get('message', 'Unknown error')
+            return False, f"GitHub error: {error_msg}"
+            
+    except Exception as e: 
+        return False, f"Error pushing to GitHub: {str(e)}"
+
+def safe_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    df2 = df.copy()
+    df2["Production for the Day"] = pd.to_numeric(df2["Production for the Day"], errors="coerce").fillna(0.0)
+    df2["Accumulative Production"] = pd.to_numeric(df2["Accumulative Production"], errors="coerce")
+    df2["Accumulative Production"] = df2.groupby("Plant")["Accumulative Production"].transform(lambda x: x.ffill().bfill())
+    return df2
+
+def generate_excel_report(df: pd.DataFrame, date_str: str):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Data', index=False, float_format="%.3f")
+        workbook = writer.book
+        worksheet = writer.sheets['Data']
+        format_num = workbook.add_format({'num_format': '#,##0.000 "m³"'})
+        worksheet.set_column('B:C', 18, format_num)
+    output.seek(0)
+    return output
+
+def generate_smart_insights(df):
+    """
+    INNOVATION: Automatically generates text-based insights for the Executive Summary.
+    """
+    total = df['Production for the Day'].sum()
+    top_plant = df.groupby('Plant')['Production for the Day'].sum().idxmax() if not df.empty else "N/A"
+    top_val = df.groupby('Plant')['Production for the Day'].sum().max() if not df.empty else 0
+    avg = df['Production for the Day'].mean() if not df.empty else 0
+    
+    insight = f"**Executive Summary:** The total production for this period stands at **{format_m3(total)}**. "
+    insight += f"The leading facility is **{top_plant}**, contributing **{format_m3(top_val)}** to the total output. "
+    insight += f"On average, daily plant production is tracking at **{format_m3(avg)}**."
+    return insight
+
+# ========================================
+# 6. CHARTING ENGINE
+# ========================================
+def get_theme_colors(theme_name):
+    # Professional Solid Colors
+    themes = {
+        "Neon Cyber": ["#F72585", "#7209B7", "#3A0CA3", "#4361EE", "#4CC9F0"], # Bright/Neon
+        "Executive Blue": ["#1E40AF", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"], # Solid Blues
+        "Emerald City": ["#065F46", "#10B981", "#34D399", "#6EE7B7", "#A7F3D0"], # Solid Greens
+        "Royal Purple": ["#581C87", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD"], # Solid Purples
+        "Crimson Tide": ["#991B1B", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]  # Solid Reds
+    }
+    return themes.get(theme_name, themes["Neon Cyber"])
+
+def get_week_range(date_obj):
+    """Get week range string (Dec 1 - Dec 7 format)"""
+    start_of_week = date_obj - timedelta(days=date_obj.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    start_str = start_of_week.strftime('%b %d')
+    end_str = end_of_week.strftime('%b %d')
+    return f"{start_str} - {end_str}"
+
+def apply_chart_theme(fig, x_axis_title="Date Range"):
+    """
+    Applies the professional layout to charts.
+    Ensures labels/legends are readable in both Dark and Light modes.
+    """
+    dark = st.session_state["dark_mode"]
+    # Dynamic text color based on mode
+    text_col = "#ffffff" if dark else "#1e293b"
+    # Subtle grid lines
+    grid_col = "rgba(255, 255, 255, 0.1)" if dark else "rgba(0, 0, 0, 0.05)"
+    
+    fig.update_layout(
+        font=dict(family="Inter", size=12, color=text_col),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=30, b=10, l=10, r=10),
+        xaxis=dict(showgrid=False, linecolor=grid_col, tickfont=dict(color=text_col), title=x_axis_title),
+        yaxis=dict(showgrid=True, gridcolor=grid_col, linecolor=grid_col, tickfont=dict(color=text_col), 
+                   tickformat=',.3f', title="Production Volume (m³)"), 
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color=text_col)),
+        hovermode="x unified"
     )
     
-    start_date, end_date = date_ranges[selected_range]
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input("Start Date", value=start_date)
-    with col2:
-        end_date = st.date_input("End Date", value=end_date)
-    
-    # Filter Options
-    st.markdown("### Filters")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        plants = ["All Plants", "Plant A", "Plant B", "Plant C", "Plant D", "Plant E"]
-        selected_plant = st.selectbox("Plant", plants)
-    
-    with col2:
-        metrics = ["Production Volume", "Efficiency", "Target Achievement", "Cost Analysis"]
-        selected_metric = st.selectbox("Metric", metrics)
-    
-    with col3:
-        chart_types = ["Line Chart", "Bar Chart", "Area Chart", "Scatter Plot"]
-        chart_type = st.selectbox("Chart Type", chart_types)
-    
-    # Analytics Dashboard
-    st.markdown("### Analytics Dashboard")
-    
-    # Sample Analytics Data
-    analytics_dates = pd.date_range(start=start_date, end=end_date, freq='D')
-    analytics_data = pd.DataFrame({
-        'Date': analytics_dates,
-        'Production': np.random.randint(7000, 9000, len(analytics_dates)) + np.random.randn(len(analytics_dates)) * 500,
-        'Target': np.full(len(analytics_dates), 8500),
-        'Efficiency': np.random.uniform(0.85, 0.98, len(analytics_dates))
-    })
-    
-    # KPI Cards for Analytics
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        total_production = analytics_data['Production'].sum()
-        VisualizationEngine.create_metric_card(
-            "Total Production",
-            Utilities.format_volume(total_production),
-            f"{len(analytics_data)} days"
-        )
-    
-    with col2:
-        avg_production = analytics_data['Production'].mean()
-        target_avg = analytics_data['Target'].mean()
-        variance_pct = ((avg_production - target_avg) / target_avg * 100)
-        
-        VisualizationEngine.create_metric_card(
-            "Average Daily",
-            Utilities.format_volume(avg_production),
-            f"{variance_pct:+.1f}% vs target",
-            "positive" if variance_pct >= 0 else "negative"
-        )
-    
-    with col3:
-        avg_efficiency = analytics_data['Efficiency'].mean() * 100
-        VisualizationEngine.create_metric_card(
-            "Average Efficiency",
-            f"{avg_efficiency:.1f}%",
-            "Industry avg: 92%",
-            "positive" if avg_efficiency >= 92 else "negative"
-        )
-    
-    # Main Analytics Chart
-    st.markdown("#### Production Trend")
-    
+    # Force tooltip to show Plant Name instead of just date or index
+    # We update traces to look for customdata or specific text
+    fig.update_traces(
+        hovertemplate="<b>%{x}</b><br>Value: %{y:,.3f} m³<br>Plant: %{text}<extra></extra>" if 'text' in fig.data[0] else None
+    )
+    return fig
+
+def create_forecast_vs_actual_chart(daily_data, forecast_data, title="Actual vs Expected Production"):
+    """
+    Create a line chart comparing actual production vs expected production
+    """
     fig = go.Figure()
     
-    # Add actual production
+    # Add actual production line (Blue)
     fig.add_trace(go.Scatter(
-        x=analytics_data['Date'],
-        y=analytics_data['Production'],
+        x=daily_data['Date'],
+        y=daily_data['Total Production'],
         mode='lines+markers',
         name='Actual Production',
         line=dict(color='#3b82f6', width=3),
-        marker=dict(size=6)
+        marker=dict(size=8, color='#3b82f6'),
+        hovertemplate='<b>%{x|%b %d, %Y}</b><br>Actual: %{y:,.3f} m³<extra></extra>'
     ))
     
-    # Add target line
+    # Add expected production line (Red)
     fig.add_trace(go.Scatter(
-        x=analytics_data['Date'],
-        y=analytics_data['Target'],
-        mode='lines',
-        name='Daily Target',
-        line=dict(color='#ef4444', width=2, dash='dash')
+        x=daily_data['Date'],
+        y=forecast_data['Expected Production'],
+        mode='lines+markers',
+        name='Expected Production',
+        line=dict(color='#ef4444', width=3, dash='dash'),
+        marker=dict(size=6, color='#ef4444'),
+        hovertemplate='<b>%{x|%b %d, %Y}</b><br>Expected: %{y:,.3f} m³<extra></extra>'
     ))
     
-    # Apply theme
-    theme = ThemeManager.get_current_theme()
     fig.update_layout(
-        title=dict(
-            text=f"Production Analysis: {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}",
-            font=dict(size=16, color=theme['text'])
-        ),
-        xaxis=dict(
-            title="Date",
-            gridcolor=theme['border'],
-            tickformat="%b %d"
-        ),
-        yaxis=dict(
-            title="Production Volume (m³)",
-            gridcolor=theme['border']
-        ),
-        plot_bgcolor=theme['surface'],
-        paper_bgcolor=theme['background'],
-        font=dict(color=theme['text']),
+        title=title,
+        xaxis_title="Date",
+        yaxis_title="Production Volume (m³)",
         hovermode="x unified",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Additional Analytics
-    st.markdown("#### Detailed Analysis")
-    
-    tab1, tab2, tab3 = st.tabs(["Performance Metrics", "Plant Comparison", "Forecast Analysis"])
-    
-    with tab1:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Efficiency Distribution
-            fig_eff = px.histogram(
-                analytics_data, 
-                x='Efficiency',
-                title="Efficiency Distribution",
-                nbins=20,
-                color_discrete_sequence=[theme['secondary']]
-            )
-            fig_eff.update_layout(
-                plot_bgcolor=theme['surface'],
-                paper_bgcolor=theme['background'],
-                font=dict(color=theme['text'])
-            )
-            st.plotly_chart(fig_eff, use_container_width=True)
-        
-        with col2:
-            # Daily Variance
-            analytics_data['Variance'] = analytics_data['Production'] - analytics_data['Target']
-            fig_var = px.bar(
-                analytics_data,
-                x='Date',
-                y='Variance',
-                title="Daily Target Variance",
-                color=analytics_data['Variance'] >= 0,
-                color_discrete_map={True: theme['success'], False: theme['error']}
-            )
-            fig_var.update_layout(
-                plot_bgcolor=theme['surface'],
-                paper_bgcolor=theme['background'],
-                font=dict(color=theme['text']),
-                showlegend=False
-            )
-            st.plotly_chart(fig_var, use_container_width=True)
-    
-    with tab2:
-        # Plant comparison (sample data)
-        plant_comparison = pd.DataFrame({
-            'Plant': ['Plant A', 'Plant B', 'Plant C', 'Plant D', 'Plant E'],
-            'Production': np.random.randint(1500, 3000, 5),
-            'Efficiency': np.random.uniform(0.85, 0.98, 5),
-            'Uptime': np.random.uniform(0.92, 0.99, 5)
-        })
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig_plant = px.bar(
-                plant_comparison,
-                x='Plant',
-                y='Production',
-                title="Production by Plant",
-                color='Plant',
-                text_auto='.2s'
-            )
-            fig_plant.update_layout(
-                plot_bgcolor=theme['surface'],
-                paper_bgcolor=theme['background'],
-                font=dict(color=theme['text'])
-            )
-            st.plotly_chart(fig_plant, use_container_width=True)
-        
-        with col2:
-            fig_eff_plant = px.bar(
-                plant_comparison,
-                x='Plant',
-                y='Efficiency',
-                title="Efficiency by Plant",
-                color='Plant',
-                text_auto='.1%'
-            )
-            fig_eff_plant.update_layout(
-                plot_bgcolor=theme['surface'],
-                paper_bgcolor=theme['background'],
-                font=dict(color=theme['text'])
-            )
-            st.plotly_chart(fig_eff_plant, use_container_width=True)
-    
-    with tab3:
-        # Forecast analysis
-        current_month = current_time.month
-        current_year = current_time.year
-        
-        # Get current month forecast
-        current_forecast = forecast_manager.get_forecast(current_year, current_month)
-        days_so_far = current_time.day
-        expected_so_far = (current_forecast / calendar.monthrange(current_year, current_month)[1]) * days_so_far
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            VisualizationEngine.create_metric_card(
-                "Monthly Forecast",
-                Utilities.format_volume(current_forecast),
-                f"{calendar.month_name[current_month]} {current_year}"
-            )
-        
-        with col2:
-            VisualizationEngine.create_metric_card(
-                "Expected to Date",
-                Utilities.format_volume(expected_so_far),
-                f"{days_so_far} days elapsed"
-            )
-        
-        with col3:
-            # Calculate actual vs expected (using sample data)
-            actual_so_far = analytics_data['Production'].sum() / len(analytics_data) * days_so_far
-            variance = actual_so_far - expected_so_far
-            variance_pct = (variance / expected_so_far * 100) if expected_so_far > 0 else 0
-            
-            VisualizationEngine.create_metric_card(
-                "Variance",
-                f"{variance_pct:+.1f}%",
-                f"{Utilities.format_volume(abs(variance))} {'above' if variance >= 0 else 'below'}",
-                "positive" if variance >= 0 else "negative"
-            )
+    return fig
 
-elif selected_page == "Forecast Management":
-    st.title("Forecast Management")
-    
-    # Current Forecast Overview
-    current_time = Utilities.get_kuwait_time()
-    current_forecast = forecast_manager.get_forecast(current_time.year, current_time.month)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
+# ========================================
+# 7. MAIN APPLICATION LOGIC
+# ========================================
+
+# LOGIN SCREEN
+if not st.session_state.get("logged_in", False):
+    c1, c2, c3 = st.columns([1, 1.5, 1])
+    with c2:
+        st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
+        # Dynamic Card for Login
         st.markdown(f"""
-        <div class="enterprise-card">
-            <div class="card-title">Current Month Forecast</div>
-            <div class="card-value">{Utilities.format_volume(current_forecast)}</div>
-            <div class="card-subtitle">{calendar.month_name[current_time.month]} {current_time.year}</div>
+        <div style="background:{'#1e293b' if st.session_state.get('dark_mode') else 'white'}; padding:40px; border-radius:20px; box-shadow:0 20px 40px -10px rgba(0,0,0,0.2); text-align:center; border:1px solid #334155;">
+            <h1 style="color:{'#f8fafc' if st.session_state.get('dark_mode') else '#0f172a'}; margin-bottom:0;">KBRC DASHBOARD</h1>
+            <p style="color:#64748b; font-size:0.9rem; letter-spacing:1px; margin-bottom:30px;">SECURE LOGIN</p>
         </div>
         """, unsafe_allow_html=True)
-    
-    with col2:
-        days_in_month = calendar.monthrange(current_time.year, current_time.month)[1]
-        daily_target = current_forecast / days_in_month if days_in_month > 0 else 0
         
-        st.markdown(f"""
-        <div class="enterprise-card">
-            <div class="card-title">Daily Target</div>
-            <div class="card-value">{Utilities.format_volume(daily_target)}</div>
-            <div class="card-subtitle">{days_in_month} days in month</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Forecast Management
-    st.markdown("### Manage Forecasts")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Year selection
-        years = [current_time.year - 1, current_time.year, current_time.year + 1]
-        selected_year = st.selectbox("Select Year", years, index=1)
-    
-    with col2:
-        # Month selection
-        months = list(calendar.month_name)[1:]  # Skip empty first element
-        selected_month = st.selectbox("Select Month", months, index=current_time.month - 1)
-    
-    # Get current forecast for selected month
-    month_number = list(calendar.month_name).index(selected_month)
-    existing_forecast = forecast_manager.get_forecast(selected_year, month_number)
-    
-    # Forecast Input
-    st.markdown("#### Set Forecast Value")
-    
-    forecast_value = st.number_input(
-        "Monthly Forecast Volume (m³)",
-        min_value=0.0,
-        value=float(existing_forecast) if existing_forecast > 0 else 0.0,
-        step=1000.0,
-        format="%.2f"
-    )
-    
-    if st.button("Save Forecast", type="primary", use_container_width=True):
-        if forecast_value > 0:
-            success, message = forecast_manager.save_forecast(selected_year, month_number, forecast_value)
-            if success:
-                st.success(f"Forecast saved successfully for {selected_month} {selected_year}")
-                st.rerun()
-            else:
-                st.error(message)
-        else:
-            st.warning("Please enter a forecast value greater than 0")
-    
-    # Existing Forecasts
-    st.markdown("### Existing Forecasts")
-    
-    forecasts = forecast_manager.get_all_forecasts()
-    
-    if forecasts:
-        forecast_df = pd.DataFrame(forecasts)
-        forecast_df['Month_Name'] = forecast_df['month'].apply(lambda x: calendar.month_name[x])
-        forecast_df['Date'] = pd.to_datetime(forecast_df[['year', 'month']].assign(day=1))
-        forecast_df = forecast_df.sort_values('Date', ascending=False)
-        
-        # Display as cards
-        for _, forecast in forecast_df.head(10).iterrows():
-            col1, col2, col3 = st.columns([2, 2, 1])
-            
-            with col1:
-                st.write(f"**{forecast['Month_Name']} {forecast['year']}**")
-            
-            with col2:
-                st.write(f"{Utilities.format_volume(forecast['value'])}")
-            
-            with col3:
-                if st.button("Edit", key=f"edit_{forecast['year']}_{forecast['month']}"):
-                    st.session_state['edit_forecast'] = forecast
+        with st.form("login"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("Access Dashboard", type="primary", use_container_width=True):
+                if check_credentials(u, p):
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = u
                     st.rerun()
-        
-        # Show all in a table
-        with st.expander("View All Forecasts"):
-            display_df = forecast_df[['year', 'month', 'value', 'updated_at', 'updated_by']].copy()
-            display_df['month'] = display_df['month'].apply(lambda x: calendar.month_name[x])
-            display_df['value'] = display_df['value'].apply(Utilities.format_volume)
-            st.dataframe(display_df, use_container_width=True)
-    else:
-        st.info("No forecasts have been created yet.")
+                else: st.error("Access Denied")
+    st.stop()
 
-elif selected_page == "Data Upload":
-    st.title("Data Upload")
-    
-    # Upload Section
-    st.markdown("### Upload Daily Production Data")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Date selection
-        upload_date = st.date_input(
-            "Production Date",
-            value=Utilities.get_kuwait_time().date()
-        )
-    
-    with col2:
-        # File upload
-        uploaded_file = st.file_uploader(
-            "Choose Excel file",
-            type=["xlsx", "xls"],
-            help="Upload Excel file with production data"
-        )
-    
-    # Template Download
-    st.markdown("---")
-    st.markdown("### Need a Template?")
-    
-    # Create sample template
-    template_data = pd.DataFrame({
-        'Plant': ['Plant A', 'Plant B', 'Plant C', 'Plant D'],
-        'Production For The Day': [2500.50, 1800.75, 2200.25, 1950.00],
-        'Accumulative Production': [52500.50, 41800.75, 52200.25, 39500.00]
-    })
-    
-    # Convert to Excel
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        template_data.to_excel(writer, sheet_name='Production Data', index=False)
-        
-        # Get workbook and worksheet
-        workbook = writer.book
-        worksheet = writer.sheets['Production Data']
-        
-        # Add formatting
-        header_format = workbook.add_format({
-            'bold': True,
-            'bg_color': '#1e3a8a',
-            'font_color': 'white',
-            'border': 1
-        })
-        
-        # Write headers
-        for col_num, value in enumerate(template_data.columns.values):
-            worksheet.write(0, col_num, value, header_format)
-        
-        # Set column widths
-        worksheet.set_column('A:A', 15)
-        worksheet.set_column('B:C', 25)
-    
-    output.seek(0)
-    
-    # Download button
-    st.download_button(
-        label="Download Template",
-        data=output,
-        file_name="KBRC_Production_Template.xlsx",
-        mime="application/vnd.ms-excel",
-        use_container_width=True
-    )
-    
-    # Process uploaded file
-    if uploaded_file is not None:
-        st.markdown("---")
-        st.markdown("### File Preview & Validation")
-        
-        try:
-            # Process the file
-            df = DataProcessor.process_uploaded_file(uploaded_file, upload_date)
-            
-            # Display preview
-            st.success("✅ File validated successfully!")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("#### Data Preview")
-                st.dataframe(df.head(), use_container_width=True)
-            
-            with col2:
-                st.markdown("#### Data Summary")
-                analysis = DataProcessor.analyze_daily_data(df)
-                
-                st.metric("Total Production", Utilities.format_volume(analysis['total_production']))
-                st.metric("Number of Plants", analysis['plant_count'])
-                st.metric("Top Plant", analysis['top_plant'])
-                st.metric("Top Plant Production", Utilities.format_volume(analysis['top_value']))
-            
-            # Generate insights
-            st.markdown("#### Insights")
-            insights = DataProcessor.generate_insights(df)
-            for insight in insights:
-                st.markdown(f"- {insight}")
-            
-            # Save data
-            st.markdown("---")
-            st.markdown("### Save to Database")
-            
-            if st.button("Save Data", type="primary", use_container_width=True):
-                # Save file
-                filename = f"{upload_date.strftime('%Y-%m-%d')}.xlsx"
-                filepath = data_manager.DATA_DIR / filename
-                
-                df.to_excel(filepath, index=False)
-                
-                # Log the event
-                auth_manager.log_event(
-                    st.session_state['username'],
-                    "DATA_UPLOAD",
-                    f"Uploaded production data for {upload_date}"
-                )
-                
-                st.success(f"✅ Data saved successfully for {upload_date}")
-                st.balloons()
-                
-        except Exception as e:
-            st.error(f"❌ Error processing file: {str(e)}")
-
-elif selected_page == "Data Management":
-    st.title("Data Management")
-    
-    # List existing data files
-    data_files = list(data_manager.DATA_DIR.glob("*.xlsx"))
-    
-    if not data_files:
-        st.info("No data files found in the system.")
-    else:
-        st.markdown(f"### Found {len(data_files)} Data Files")
-        
-        # Create a DataFrame of files
-        files_data = []
-        for file_path in data_files:
-            try:
-                # Extract date from filename
-                date_str = file_path.stem
-                file_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                
-                # Get file info
-                size_kb = file_path.stat().st_size / 1024
-                
-                files_data.append({
-                    "Date": file_date,
-                    "Filename": file_path.name,
-                    "Size (KB)": f"{size_kb:.1f}",
-                    "Path": str(file_path)
-                })
-            except:
-                continue
-        
-        if files_data:
-            files_df = pd.DataFrame(files_data)
-            files_df = files_df.sort_values("Date", ascending=False)
-            
-            # Display table
-            st.dataframe(
-                files_df[["Date", "Filename", "Size (KB)"]],
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # File operations
-            st.markdown("### File Operations")
-            
-            selected_file = st.selectbox(
-                "Select a file to manage",
-                files_df["Filename"].tolist()
-            )
-            
-            if selected_file:
-                file_path = data_manager.DATA_DIR / selected_file
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.button("View Data", use_container_width=True):
-                        try:
-                            df = pd.read_excel(file_path)
-                            st.dataframe(df, use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Error reading file: {e}")
-                
-                with col2:
-                    # Download button
-                    with open(file_path, "rb") as f:
-                        file_data = f.read()
-                    
-                    st.download_button(
-                        label="Download",
-                        data=file_data,
-                        file_name=selected_file,
-                        mime="application/vnd.ms-excel",
-                        use_container_width=True
-                    )
-                
-                with col3:
-                    if st.button("Delete", type="secondary", use_container_width=True):
-                        # Confirm deletion
-                        if st.checkbox("Confirm deletion"):
-                            file_path.unlink()
-                            auth_manager.log_event(
-                                st.session_state['username'],
-                                "DATA_DELETE",
-                                f"Deleted file: {selected_file}"
-                            )
-                            st.success(f"Deleted {selected_file}")
-                            st.rerun()
-
-elif selected_page == "Audit Logs":
-    if st.session_state['username'] not in ['admin', 'manager']:
-        st.error("Access denied. This section requires administrative privileges.")
-        st.stop()
-    
-    st.title("Security Audit Logs")
-    
-    # Date filter
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        log_start_date = st.date_input("Start Date", value=Utilities.get_kuwait_time().date() - timedelta(days=7))
-    
-    with col2:
-        log_end_date = st.date_input("End Date", value=Utilities.get_kuwait_time().date())
-    
-    # Load logs
-    log_file = data_manager.DATA_DIR / "audit_log.csv"
-    
-    if log_file.exists():
-        logs_df = pd.read_csv(log_file)
-        logs_df['timestamp'] = pd.to_datetime(logs_df['timestamp'])
-        
-        # Filter by date
-        mask = (logs_df['timestamp'].dt.date >= log_start_date) & (logs_df['timestamp'].dt.date <= log_end_date)
-        filtered_logs = logs_df[mask].copy()
-        
-        # Sort by timestamp
-        filtered_logs = filtered_logs.sort_values('timestamp', ascending=False)
-        
-        # Display stats
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Events", len(filtered_logs))
-        
-        with col2:
-            unique_users = filtered_logs['user'].nunique()
-            st.metric("Unique Users", unique_users)
-        
-        with col3:
-            failed_logins = len(filtered_logs[filtered_logs['event'] == 'LOGIN_FAILED'])
-            st.metric("Failed Logins", failed_logins)
-        
-        with col4:
-            success_logins = len(filtered_logs[filtered_logs['event'] == 'LOGIN_SUCCESS'])
-            st.metric("Successful Logins", success_logins)
-        
-        # Display logs
-        st.markdown("### Audit Trail")
-        
-        # Event type filter
-        event_types = filtered_logs['event'].unique()
-        selected_events = st.multiselect(
-            "Filter by Event Type",
-            event_types,
-            default=event_types[:5] if len(event_types) > 0 else []
-        )
-        
-        if selected_events:
-            filtered_logs = filtered_logs[filtered_logs['event'].isin(selected_events)]
-        
-        # Display table
-        display_cols = ['timestamp', 'user', 'event', 'details']
-        st.dataframe(
-            filtered_logs[display_cols],
-            use_container_width=True,
-            column_config={
-                'timestamp': st.column_config.DatetimeColumn(
-                    "Timestamp",
-                    format="YYYY-MM-DD HH:mm:ss"
-                ),
-                'user': "User",
-                'event': "Event",
-                'details': "Details"
-            }
-        )
-        
-        # Export option
-        csv_data = filtered_logs.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Export as CSV",
-            data=csv_data,
-            file_name=f"audit_logs_{log_start_date}_{log_end_date}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    else:
-        st.info("No audit logs found.")
-
-elif selected_page == "System Settings":
-    if st.session_state['username'] != 'admin':
-        st.error("Access denied. Admin privileges required.")
-        st.stop()
-    
-    st.title("System Settings")
-    
-    tab1, tab2, tab3 = st.tabs(["General", "Security", "Integration"])
-    
-    with tab1:
-        st.markdown("### General Settings")
-        
-        # System name
-        system_name = st.text_input(
-            "System Name",
-            value="KBRC Production Dashboard",
-            help="Display name for the dashboard"
-        )
-        
-        # Timezone
-        timezone = st.selectbox(
-            "System Timezone",
-            ["Asia/Kuwait", "UTC", "America/New_York", "Europe/London"],
-            index=0
-        )
-        
-        # Data retention
-        retention_days = st.slider(
-            "Data Retention Period (days)",
-            min_value=30,
-            max_value=365,
-            value=90,
-            help="How long to keep historical data"
-        )
-        
-        if st.button("Save General Settings", type="primary"):
-            st.success("Settings saved successfully!")
-    
-    with tab2:
-        st.markdown("### Security Settings")
-        
-        # Session timeout
-        timeout_minutes = st.slider(
-            "Session Timeout (minutes)",
-            min_value=15,
-            max_value=240,
-            value=30,
-            help="Automatic logout after inactivity"
-        )
-        
-        # Password policy
-        st.markdown("#### Password Policy")
-        
-        min_length = st.slider(
-            "Minimum Password Length",
-            min_value=8,
-            max_value=20,
-            value=12
-        )
-        
-        require_numbers = st.checkbox("Require numbers", value=True)
-        require_special = st.checkbox("Require special characters", value=True)
-        
-        if st.button("Save Security Settings", type="primary"):
-            st.success("Security settings updated!")
-    
-    with tab3:
-        st.markdown("### Integration Settings")
-        
-        # GitHub integration
-        st.markdown("#### GitHub Integration")
-        
-        github_repo = st.text_input(
-            "GitHub Repository",
-            placeholder="username/repository",
-            help="Format: username/repository-name"
-        )
-        
-        github_token = st.text_input(
-            "GitHub Token",
-            type="password",
-            help="Personal access token for GitHub API"
-        )
-        
-        # Email notifications
-        st.markdown("#### Email Notifications")
-        
-        smtp_server = st.text_input("SMTP Server")
-        smtp_port = st.number_input("SMTP Port", value=587)
-        notification_email = st.text_input("Notification Email")
-        
-        if st.button("Save Integration Settings", type="primary"):
-            st.success("Integration settings saved!")
-
-elif selected_page == "User Management":
-    if st.session_state['username'] != 'admin':
-        st.error("Access denied. Admin privileges required.")
-        st.stop()
-    
-    st.title("User Management")
-    
-    # Display current users
-    st.markdown("### Current Users")
-    
-    users_list = list(auth_manager.users.keys())
-    user_df = pd.DataFrame({
-        'Username': users_list,
-        'Role': ['Admin' if user == 'admin' else 'Manager' if user == 'manager' else 'User' for user in users_list]
-    })
-    
-    st.dataframe(user_df, use_container_width=True)
-    
-    # Add new user
-    st.markdown("### Add New User")
-    
-    with st.form("add_user_form"):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            new_username = st.text_input("Username")
-        
-        with col2:
-            new_password = st.text_input("Password", type="password")
-        
-        with col3:
-            new_role = st.selectbox("Role", ["Admin", "Manager", "Analyst"])
-        
-        if st.form_submit_button("Add User", type="primary"):
-            if new_username and new_password:
-                # In production, you would save this to a secure database
-                st.success(f"User {new_username} added successfully!")
-            else:
-                st.warning("Please fill in all fields")
-
-elif selected_page == "Reports":
-    st.title("Reports & Exports")
-    
-    # Report types
-    report_type = st.selectbox(
-        "Select Report Type",
-        ["Daily Production Report", "Monthly Summary", "Forecast Analysis", "Plant Performance", "Custom Report"]
-    )
-    
-    # Date range for report
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        report_start = st.date_input("Report Start Date")
-    
-    with col2:
-        report_end = st.date_input("Report End Date")
-    
-    # Report options
-    st.markdown("### Report Options")
-    
-    options_col1, options_col2 = st.columns(2)
-    
-    with options_col1:
-        include_charts = st.checkbox("Include Charts", value=True)
-        include_summary = st.checkbox("Include Executive Summary", value=True)
-    
-    with options_col2:
-        format_type = st.selectbox("Format", ["PDF", "Excel", "HTML", "CSV"])
-        detail_level = st.select_slider("Detail Level", ["Summary", "Standard", "Detailed"])
-    
-    # Generate report
-    st.markdown("### Generate Report")
-    
-    if st.button("Generate Report", type="primary", use_container_width=True):
-        # Placeholder for report generation
-        st.info(f"Generating {report_type} for {report_start} to {report_end}...")
-        
-        # Simulate report generation
-        import time
-        with st.spinner("Creating report..."):
-            time.sleep(2)
-            
-            # Create sample report data
-            sample_report = pd.DataFrame({
-                'Date': pd.date_range(start=report_start, end=report_end, freq='D'),
-                'Production': np.random.randint(7000, 9000, (report_end - report_start).days + 1),
-                'Target': np.full((report_end - report_start).days + 1, 8500)
-            })
-            
-            # Create download button
-            csv_data = sample_report.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label=f"Download {report_type} ({format_type})",
-                data=csv_data,
-                file_name=f"KBRC_Report_{report_start}_{report_end}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-            
-            st.success("Report generated successfully!")
-    
-    # Recent reports
-    st.markdown("### Recent Reports")
-    
-    recent_reports = [
-        {"name": "Monthly Production Summary - Nov 2024", "date": "2024-12-01", "type": "Monthly"},
-        {"name": "Plant Efficiency Analysis", "date": "2024-11-28", "type": "Analysis"},
-        {"name": "Q4 Forecast Review", "date": "2024-11-25", "type": "Forecast"},
-        {"name": "Daily Production - Week 48", "date": "2024-11-22", "type": "Weekly"}
-    ]
-    
-    for report in recent_reports:
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            st.write(f"**{report['name']}**")
-        with col2:
-            st.write(report['type'])
-        with col3:
-            st.write(report['date'])
-
-else:
-    # Default page (Dashboard if none selected)
-    st.title("Welcome to KBRC Dashboard")
-    st.info("Select a page from the sidebar to get started.")
-
-# ========================================
-# 14. FOOTER
-# ========================================
-st.markdown("""
-<div style="
-    margin-top: 50px;
-    padding-top: 20px;
-    border-top: 1px solid #e2e8f0;
-    text-align: center;
-    color: #64748b;
-    font-size: 0.8rem;
-">
-    <p>
-        Kuwait Building Readymix Company • Production Dashboard v3.0 •
-        Last Updated: 2024
-    </p>
-    <p style="font-size: 0.7rem;">
-        For technical support: <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color: #3b82f6;">Ashwin.IT@kbrc.com.kw</a> •
-        Confidential & Proprietary
-    </p>
+# SIDEBAR CONFIGURATION
+user = st.session_state["username"]
+st.sidebar.markdown(f"""
+<div style="padding:20px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:20px; background-color: {'#1e293b' if st.session_state['dark_mode'] else '#ffffff'};">
+    <div style="color:#64748b; font-size:0.8rem; font-weight:600; text-transform:uppercase;">{get_greeting()}</div>
+    <div style="color:{'#f8fafc' if st.session_state['dark_mode'] else '#0f172a'}; font-size:1.4rem; font-weight:800; margin-top:4px;">{user.title()}</div>
+    <div style="margin-top:10px; display:flex; align-items:center;">
+        <span style="height:10px; width:10px; background-color:#10b981; border-radius:50%; margin-right:8px; display:inline-block;"></span>
+        <span style="color:#10b981; font-size:0.8rem; font-weight:600;">System Active</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
+
+menu = ["Analytics", "Upload New Data", "Historical Archives", "Data Management"]
+if user == "manager": menu.append("Audit Logs")
+mode = st.sidebar.radio("Navigation", menu)
+
+st.sidebar.markdown("---")
+
+# --- FORECAST DISPLAY (ALL USERS) ---
+current_time = get_kuwait_time()
+current_month_forecast = get_forecast(current_time.year, current_time.month)
+current_month_name = calendar.month_name[current_time.month]
+
+if current_month_forecast > 0:
+    daily_target = calculate_daily_target(current_month_forecast, current_time.year, current_time.month)
+    st.sidebar.markdown(f"""
+    <div class="forecast-upload-box">
+        <div style="font-size:0.9rem; color:#64748b; margin-bottom:5px;">📊 Current Month Forecast</div>
+        <div style="font-size:1.8rem; font-weight:800; color:#3b82f6;">{format_m3(current_month_forecast)}</div>
+        <div style="font-size:0.9rem; color:#64748b; margin-top:5px;">{current_month_name} {current_time.year}</div>
+        <div style="font-size:0.8rem; color:#10b981; font-weight:600; margin-top:8px;">
+            <strong>Expected Average: {format_m3(daily_target)}/day</strong>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # Show placeholder if no forecast
+    st.sidebar.markdown(f"""
+    <div class="forecast-upload-box">
+        <div style="font-size:0.9rem; color:#64748b; margin-bottom:5px;">📊 Current Month Forecast</div>
+        <div style="font-size:1.2rem; color:#ef4444; font-weight:600;">Not Set</div>
+        <div style="font-size:0.9rem; color:#64748b; margin-top:5px;">{current_month_name} {current_time.year}</div>
+        <div style="font-size:0.8rem; color:#94a3b8; margin-top:8px;">
+            Manager can set forecast
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- MANAGER ONLY: FORECAST SETTING ---
+if user == "manager":
+    with st.sidebar.expander("🎯 Manager Forecast Controls", expanded=False):
+        st.markdown("### Set Monthly Forecast")
+        
+        # Year and month selection
+        current_year = current_time.year
+        f_year = st.selectbox("Forecast Year", 
+                             [current_year - 1, current_year, current_year + 1],
+                             index=1)
+        
+        f_month = st.selectbox("Forecast Month", 
+                              list(calendar.month_name)[1:],  # Skip empty first element
+                              index=current_time.month - 1)
+        
+        month_num = list(calendar.month_name).index(f_month)
+        
+        # Get current forecast value if exists
+        current_val = get_forecast(f_year, month_num)
+        
+        # Forecast value input
+        f_target = st.number_input(
+            "Monthly Forecast Target (m³)", 
+            min_value=0.0, 
+            value=float(current_val) if current_val > 0 else 0.0,
+            step=100.0,
+            format="%.3f"
+        )
+        
+        # Display GitHub status
+        if GITHUB_TOKEN and GITHUB_REPO:
+            st.info("✅ GitHub integration is active")
+        else:
+            st.warning("⚠️ GitHub not configured - forecasts will only be saved locally")
+        
+        # Save forecast button
+        if st.button("💾 Save Forecast", type="primary", use_container_width=True):
+            if f_target > 0:
+                success, message = save_forecast_value(f_year, month_num, f_target)
+                if success:
+                    st.success(message)
+                    # Show file path
+                    file_path = get_forecast_file_path(f_year, month_num)
+                    st.info(f"File saved at: {file_path}")
+                    
+                    # Refresh the page to show updated forecast
+                    st.rerun()
+                else:
+                    st.error(message)
+            else:
+                st.warning("Please enter a forecast value greater than 0")
+        
+        # Show existing forecasts
+        available_forecasts = list_available_forecasts()
+        if available_forecasts:
+            st.markdown("---")
+            st.markdown("### Existing Forecasts")
+            for year, month, forecast_val in available_forecasts[:5]:  # Show last 5
+                if forecast_val > 0:
+                    st.markdown(f"**{calendar.month_name[month]} {year}:** {format_m3(forecast_val)}")
+        else:
+            st.markdown("---")
+            st.markdown("### No forecasts saved yet")
+
+st.sidebar.markdown("---")
+
+# DARK MODE TOGGLE
+is_dark = st.sidebar.toggle("🌙 Dark Mode", value=st.session_state["dark_mode"])
+if is_dark != st.session_state["dark_mode"]:
+    st.session_state["dark_mode"] = is_dark
+    st.rerun()
+
+# THEME SELECTOR
+theme_sel = st.sidebar.selectbox("Chart Theme", 
+                                 ["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"],
+                                 index=["Neon Cyber", "Executive Blue", "Emerald City", "Royal Purple", "Crimson Tide"].index(st.session_state.get("theme", "Neon Cyber")))
+if theme_sel != st.session_state.get("theme"):
+    st.session_state["theme"] = theme_sel
+    st.rerun()
+
+current_theme_colors = get_theme_colors(st.session_state.get("theme", "Neon Cyber"))
+alert_threshold = st.sidebar.number_input("Alert Threshold (m³)", 50.0, step=10.0)
+
+if st.sidebar.button("Logout"):
+    log_event(user, "Logout")
+    st.session_state.clear()
+    st.rerun()
+
+# ========================================
+# MODULE 1: EXECUTIVE ANALYTICS
+# ========================================
+if mode == "Analytics":
+    st.title("Executive Analytics")
+    
+    saved = list_saved_dates()
+    if len(saved) < 2:
+        st.warning("Insufficient data. Please upload at least 2 days of production records.")
+        st.stop()
+        
+    # DATE FILTERING
+    c1, c2 = st.columns(2)
+    with c1: start_d = st.date_input("Start Date", value=datetime.today() - timedelta(days=30))
+    with c2: end_d = st.date_input("End Date", value=datetime.today())
+    
+    # DATA LOADING
+    frames = []
+    for d in saved:
+        try:
+            df = load_saved(d)
+            df['Date'] = pd.to_datetime(df['Date'])
+            df = df[~df['Plant'].astype(str).str.upper().str.contains("TOTAL")] 
+            frames.append(df)
+        except: continue
+        
+    if not frames: st.stop()
+    full_df = pd.concat(frames, ignore_index=True)
+    
+    # STRICT FILTERING (Removes unwanted dates from Oct if not selected)
+    mask = (full_df['Date'] >= pd.to_datetime(start_d)) & (full_df['Date'] <= pd.to_datetime(end_d))
+    df_filtered = full_df[mask].copy().sort_values('Date')
+    
+    if df_filtered.empty:
+        st.info("No data available for the selected date range.")
+        st.stop()
+        
+    df_filtered = safe_numeric(df_filtered)
+    # Deduplicate to prevent math errors
+    df_filtered = df_filtered.drop_duplicates(subset=['Date', 'Plant'], keep='last')
+    
+    # Calculate total production for the BIG BOX
+    total_production = df_filtered['Production for the Day'].sum()
+    
+    # --- BIG TOTAL PRODUCTION BOX ---
+    st.markdown(f"""
+    <div class="total-production-box">
+        <div style="font-size:1.2rem; opacity:0.9; margin-bottom:10px;">📊 TOTAL PRODUCTION</div>
+        <div style="font-size:4rem; font-weight:900; margin:20px 0;">{format_m3(total_production)}</div>
+        <div style="font-size:1rem; opacity:0.8;">
+            Date Range: {start_d.strftime('%b %d, %Y')} to {end_d.strftime('%b %d, %Y')}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- FORECAST CALCULATION ---
+    # Get forecasts for the selected date range
+    forecasts = get_forecast_for_date_range(start_d, end_d)
+    
+    # Calculate expected production for each day based on monthly forecasts
+    daily_expected = []
+    current_date = start_d
+    
+    while current_date <= end_d:
+        monthly_forecast = get_forecast(current_date.year, current_date.month)
+        days_in_month = calendar.monthrange(current_date.year, current_date.month)[1]
+        daily_target = monthly_forecast / days_in_month if days_in_month > 0 else 0
+        
+        daily_expected.append({
+            'Date': pd.Timestamp(current_date),
+            'Expected Production': daily_target
+        })
+        current_date += timedelta(days=1)
+    
+    daily_expected_df = pd.DataFrame(daily_expected)
+    
+    # Calculate actual daily totals
+    daily_actual_df = df_filtered.groupby('Date')['Production for the Day'].sum().reset_index()
+    daily_actual_df.columns = ['Date', 'Total Production']
+    
+    # Merge actual and expected
+    daily_comparison = pd.merge(daily_actual_df, daily_expected_df, on='Date', how='left')
+    daily_comparison['Expected Production'] = daily_comparison['Expected Production'].fillna(0)
+    
+    # --- TOP 3 LEADERBOARD CALCULATION ---
+    # Top 3 by Sum
+    top_sum = df_filtered.groupby("Plant")["Production for the Day"].sum().sort_values(ascending=False).head(3)
+    # Top 3 by Average
+    top_avg = df_filtered.groupby("Plant")["Production for the Day"].mean().sort_values(ascending=False).head(3)
+
+    # --- FORECAST HERO SECTION ---
+    # Determine the "Dominant" month in selection
+    if not daily_comparison.empty:
+        dom_month_idx = daily_comparison['Date'].dt.month.mode()[0]
+        dom_year_idx = daily_comparison['Date'].dt.year.mode()[0]
+        month_name = calendar.month_name[dom_month_idx]
+        
+        monthly_target = get_forecast(dom_year_idx, dom_month_idx)
+        total_vol = daily_comparison['Total Production'].sum()
+        avg_daily = daily_comparison['Total Production'].mean()
+        expected_avg = daily_comparison['Expected Production'].mean()
+        
+        # Calculate Variance
+        variance = total_vol - monthly_target
+        var_color = "#10b981" if variance >= 0 else "#ef4444"
+        var_icon = "▲" if variance >= 0 else "▼"
+        
+        # ------------------ HERO SECTION ------------------
+        st.markdown(f"""
+        <div class="hero-banner">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
+                <div>
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Daily Average</div>
+                    <div style="font-size:3rem; font-weight:800;">{avg_daily:,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8;">Actual Production</div>
+                </div>
+                <div style="border-left:1px solid rgba(255,255,255,0.2); border-right:1px solid rgba(255,255,255,0.2);">
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast ({month_name})</div>
+                    <div style="font-size:3rem; font-weight:800;">{monthly_target:,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8; font-weight:600; color:#fbbf24;">
+                        <strong>Expected Average: {format_m3(expected_avg)}/day</strong>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.9rem; opacity:0.8; text-transform:uppercase;">Forecast Variance</div>
+                    <div style="font-size:3rem; font-weight:800; color:{var_color};">{var_icon} {abs(variance):,.0f} m³</div>
+                    <div style="font-size:0.8rem; opacity:0.8;">Actual: {total_vol:,.0f} m³</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ------------------ LEADERBOARDS ------------------
+    st.markdown("### 🏆 Top Performance Leaders")
+    col_l1, col_l2 = st.columns(2)
+    
+    with col_l1:
+        st.markdown("**Highest Total Production**")
+        for i, (plant, val) in enumerate(top_sum.items()):
+            color = current_theme_colors[i % len(current_theme_colors)]
+            st.markdown(f"""
+            <div class="leaderboard-box" style="border-left-color: {color};">
+                <div>
+                    <span class="lb-rank" style="color:{color}">#{i+1}</span>
+                    <span class="lb-name">{plant}</span>
+                </div>
+                <span class="lb-val">{format_m3(val)}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+    with col_l2:
+        st.markdown("**Highest Average Efficiency**")
+        for i, (plant, val) in enumerate(top_avg.items()):
+            color = current_theme_colors[-(i+1) % len(current_theme_colors)] # Reverse colors for distinction
+            st.markdown(f"""
+            <div class="leaderboard-box" style="border-left-color: {color};">
+                <div>
+                    <span class="lb-rank" style="color:{color}">#{i+1}</span>
+                    <span class="lb-name">{plant}</span>
+                </div>
+                <span class="lb-val">{format_m3(val)}/day</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ------------------ ACTUAL VS EXPECTED CHART ------------------
+    st.markdown("### 📈 Actual vs Expected Production")
+    if not daily_comparison.empty:
+        fig_comparison = create_forecast_vs_actual_chart(daily_comparison, daily_comparison)
+        st.plotly_chart(apply_chart_theme(fig_comparison), use_container_width=True)
+
+    # TABS FOR WEEKLY / MONTHLY SPLIT
+    tab_week, tab_month = st.tabs(["📅 Weekly Performance", "📆 Monthly Performance"])
+
+    # --- WEEKLY ANALYSIS ---
+    with tab_week:
+        st.subheader("Weekly Analytics")
+        # Aggregation Logic
+        week_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='W-MON')]).agg({
+            'Production for the Day': ['sum', 'mean'],
+            'Accumulative Production': 'max'
+        }).reset_index()
+        week_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
+        
+        # Format Date Label with Week Range (Dec 1 - Dec 7 format)
+        week_agg['Week Range'] = week_agg['Date'].apply(lambda x: get_week_range(x))
+        week_agg['Week Label'] = week_agg['Week Range']
+        
+        # Post-Aggregation Filter (Double Check)
+        week_agg = week_agg[(week_agg['Date'] >= pd.to_datetime(start_d)) & (week_agg['Date'] <= pd.to_datetime(end_d))]
+
+        # NEW: Additional charts for Production of the Day
+        st.markdown("#### 📊 Weekly Production Analysis")
+        
+        # Create 4 charts in a 2x2 grid
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Chart 1: Weekly Total Production (Sum)
+            fig1 = px.bar(week_agg, x='Week Label', y='Total Production', color='Plant', 
+                         title="Weekly Total Production (Sum)", barmode='group',
+                         text='Plant',
+                         color_discrete_sequence=current_theme_colors)
+            fig1.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig1), use_container_width=True)
+            
+            # NEW Chart 3: Weekly Production Trend (Line)
+            fig3 = px.line(week_agg, x='Week Label', y='Total Production', color='Plant', markers=True,
+                          title="Weekly Production Trend",
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+            fig3.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig3), use_container_width=True)
+            
+        with col2:
+            # Chart 2: Weekly Average Production (Mean)
+            fig2 = px.bar(week_agg, x='Week Label', y='Avg Production', color='Plant', 
+                         title="Weekly Average Production (Mean)", barmode='group',
+                         text='Plant',
+                         color_discrete_sequence=current_theme_colors)
+            fig2.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Average: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig2), use_container_width=True)
+            
+            # NEW Chart 4: Weekly Production Distribution (Area)
+            fig4 = px.area(week_agg, x='Week Label', y='Total Production', color='Plant',
+                          title="Weekly Production Distribution",
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+            fig4.update_traces(
+                hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig4), use_container_width=True)
+        
+        # Weekly Accumulative Trend
+        st.markdown("#### 📈 Weekly Accumulative Trend")
+        fig_acc = px.line(week_agg, x='Week Label', y='Accumulative', color='Plant', markers=True,
+                          title="Weekly Accumulative Production",
+                          text='Plant',
+                          color_discrete_sequence=current_theme_colors)
+        fig_acc.update_traces(
+            hovertemplate='<b>Week: %{x}</b><br>Plant: %{text}<br>Accumulative: %{y:,.3f} m³<extra></extra>'
+        )
+        st.plotly_chart(apply_chart_theme(fig_acc), use_container_width=True)
+
+    # --- MONTHLY ANALYSIS ---
+    with tab_month:
+        st.subheader("Monthly Analytics")
+        
+        # Monthly Trajectory Chart
+        st.markdown("#### 🎯 Monthly Trajectory: Actual vs Forecast")
+        if not daily_comparison.empty:
+            # Calculate monthly cumulative
+            daily_comparison['Month'] = daily_comparison['Date'].dt.strftime('%B %Y')
+            monthly_cum = daily_comparison.groupby('Month').agg({
+                'Total Production': 'sum',
+                'Expected Production': 'sum'
+            }).reset_index()
+            
+            fig_traj = go.Figure()
+            fig_traj.add_trace(go.Bar(
+                x=monthly_cum['Month'],
+                y=monthly_cum['Total Production'],
+                name='Actual Production',
+                marker_color='#3b82f6',
+                text=monthly_cum['Total Production'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            fig_traj.add_trace(go.Bar(
+                x=monthly_cum['Month'],
+                y=monthly_cum['Expected Production'],
+                name='Expected Production',
+                marker_color='#ef4444',
+                text=monthly_cum['Expected Production'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_traj.update_layout(
+                title="Monthly Actual vs Expected Production",
+                barmode='group',
+                yaxis_title="Production Volume (m³)"
+            )
+            st.plotly_chart(apply_chart_theme(fig_traj), use_container_width=True)
+        
+        # Standard Monthly Charts
+        month_agg = df_filtered.groupby(['Plant', pd.Grouper(key='Date', freq='M')]).agg({
+            'Production for the Day': ['sum', 'mean'],
+            'Accumulative Production': 'max'
+        }).reset_index()
+        month_agg.columns = ['Plant', 'Date', 'Total Production', 'Avg Production', 'Accumulative']
+        month_agg['Month Label'] = month_agg['Date'].dt.strftime('%B %Y')
+        
+        month_agg = month_agg[(month_agg['Date'] >= pd.to_datetime(start_d)) & (month_agg['Date'] <= pd.to_datetime(end_d))]
+
+        # NEW: Additional charts for Monthly analysis
+        st.markdown("#### 📊 Monthly Production Analysis")
+        
+        col_m1, col_m2 = st.columns(2)
+        
+        with col_m1:
+            # Chart 1: Monthly Total Production (Sum)
+            fig_m1 = px.bar(month_agg, x='Month Label', y='Total Production', color='Plant', 
+                           title="Monthly Total Production (Sum)", barmode='group',
+                           text='Plant',
+                           color_discrete_sequence=current_theme_colors)
+            fig_m1.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m1), use_container_width=True)
+            
+            # NEW Chart 3: Monthly Production Stacked Area
+            fig_m3 = px.area(month_agg, x='Month Label', y='Total Production', color='Plant',
+                            title="Monthly Production Distribution (Stacked)",
+                            text='Plant',
+                            color_discrete_sequence=current_theme_colors)
+            fig_m3.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Total: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m3), use_container_width=True)
+            
+        with col_m2:
+            # Chart 2: Monthly Average Production (Mean)
+            fig_m2 = px.bar(month_agg, x='Month Label', y='Avg Production', color='Plant', 
+                           title="Monthly Average Production (Mean)", barmode='group',
+                           text='Plant',
+                           color_discrete_sequence=current_theme_colors)
+            fig_m2.update_traces(
+                hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Average: %{y:,.3f} m³<extra></extra>'
+            )
+            st.plotly_chart(apply_chart_theme(fig_m2), use_container_width=True)
+            
+            # NEW Chart 4: Monthly Production Heatmap
+            # Create pivot table for heatmap
+            pivot_df = month_agg.pivot_table(
+                index='Plant', 
+                columns='Month Label', 
+                values='Total Production',
+                aggfunc='sum'
+            ).fillna(0)
+            
+            fig_m4 = px.imshow(
+                pivot_df,
+                labels=dict(x="Month", y="Plant", color="Production"),
+                title="Monthly Production Heatmap by Plant",
+                aspect="auto"
+            )
+            fig_m4.update_xaxes(side="top")
+            st.plotly_chart(apply_chart_theme(fig_m4), use_container_width=True)
+        
+        # Monthly Accumulative Trend
+        st.markdown("#### 📈 Monthly Accumulative Trend")
+        fig_acc_m = px.line(month_agg, x='Month Label', y='Accumulative', color='Plant', markers=True,
+                            title="Monthly Accumulative Production",
+                            text='Plant',
+                            color_discrete_sequence=current_theme_colors)
+        fig_acc_m.update_traces(
+            hovertemplate='<b>Month: %{x}</b><br>Plant: %{text}<br>Accumulative: %{y:,.3f} m³<extra></extra>'
+        )
+        st.plotly_chart(apply_chart_theme(fig_acc_m), use_container_width=True)
+
+# ========================================
+# MODULE 2: UPLOAD DATA
+# ========================================
+elif mode == "Upload New Data":
+    st.title("Daily Production Entry")
+    c1, c2 = st.columns([2, 1])
+    with c1: uploaded = st.file_uploader("Upload Excel File", type=["xlsx"])
+    with c2:
+        if "up_date" not in st.session_state: st.session_state.up_date = datetime.today()
+        sel_date = st.date_input("Production Date", value=st.session_state.up_date)
+        st.session_state.up_date = sel_date
+        
+    if uploaded:
+        try:
+            df = pd.read_excel(uploaded)
+            df.columns = df.columns.str.strip()
+            missing = [c for c in REQUIRED_COLS if c not in df.columns]
+            if missing: st.error(f"Missing Columns: {missing}")
+            else:
+                st.dataframe(df.head(), use_container_width=True)
+                if st.button("✅ Approve & Save", type="primary"):
+                    df_clean = df.copy()
+                    df_clean['Date'] = sel_date.strftime("%Y-%m-%d")
+                    save_path = save_csv(df_clean, sel_date, overwrite=True)
+                    log_event(user, f"Uploaded {sel_date}")
+                    attempt_git_push(save_path, f"Add {sel_date}")
+                    
+                    # Show Success
+                    df_disp = df_clean[~df_clean["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+                    df_disp = safe_numeric(df_disp)
+                    tot = df_disp["Production for the Day"].sum()
+                    st.success(f"Saved! Total: {format_m3(tot)}")
+        except Exception as e: st.error(f"Error: {e}")
+
+# ========================================
+# MODULE 3: DATA MANAGEMENT
+# ========================================
+elif mode == "Data Management":
+    st.title("Database Management")
+    files = list_saved_dates()
+    if not files: st.info("No records.")
+    else:
+        for f in files:
+            with st.expander(f"📂 {f}", expanded=False):
+                c1, c2 = st.columns(2)
+                with c1:
+                    df = load_saved(f)
+                    xl = generate_excel_report(df, f)
+                    st.download_button("Download", xl, f"{f}.xlsx", key=f"d_{f}")
+                with c2:
+                    if st.button("Delete", key=f"del_{f}", type="primary"):
+                        if delete_saved(f):
+                            log_event(user, f"Deleted {f}")
+                            st.rerun()
+
+# ========================================
+# MODULE 4: HISTORICAL ARCHIVES
+# ========================================
+elif mode == "Historical Archives":
+    st.title("Historical Data")
+    files = list_saved_dates()
+    
+    if not files: 
+        st.info("No historical records found.")
+        st.stop()
+    
+    # Initialize session state with proper error handling
+    if "hist_d" not in st.session_state:
+        try:
+            # Try to parse the first valid date
+            st.session_state.hist_d = datetime.strptime(files[0], "%Y-%m-%d").date()
+        except (ValueError, IndexError):
+            # If parsing fails, use today's date
+            st.session_state.hist_d = datetime.today().date()
+    
+    # Create a dropdown with formatted dates for better UX
+    formatted_dates = []
+    for f in files:
+        try:
+            dt = datetime.strptime(f, "%Y-%m-%d")
+            formatted_dates.append((dt, f"{dt.strftime('%B %d, %Y')} ({f})"))
+        except ValueError:
+            continue
+    
+    if not formatted_dates:
+        st.error("No valid date files found.")
+        st.stop()
+    
+    # Sort by date descending
+    formatted_dates.sort(key=lambda x: x[0], reverse=True)
+    
+    # Create dropdown options
+    date_options = [fd[1] for fd in formatted_dates]
+    date_values = [fd[0].date() for fd in formatted_dates]
+    
+    # Find current selection index
+    current_index = 0
+    for i, (dt, _) in enumerate(formatted_dates):
+        if dt.date() == st.session_state.hist_d:
+            current_index = i
+            break
+    
+    # Date selection with dropdown
+    selected_option = st.selectbox(
+        "Select Date", 
+        options=date_options,
+        index=current_index,
+        key="hist_date_select"
+    )
+    
+    # Find the selected date
+    sel_d = None
+    for dt, option in formatted_dates:
+        if option == selected_option:
+            sel_d = dt.date()
+            break
+    
+    if sel_d is None:
+        sel_d = formatted_dates[0][0].date()
+    
+    st.session_state.hist_d = sel_d
+    d_str = sel_d.strftime("%Y-%m-%d")
+    
+    if d_str in files:
+        df = load_saved(d_str)
+        df = df[~df["Plant"].astype(str).str.upper().str.contains("TOTAL")]
+        df = safe_numeric(df)
+        tot = df["Production for the Day"].sum()
+        
+        # Get forecast for this day's month
+        month_forecast = get_forecast(sel_d.year, sel_d.month)
+        days_in_month = calendar.monthrange(sel_d.year, sel_d.month)[1]
+        expected_daily = month_forecast / days_in_month if days_in_month > 0 else 0
+        
+        st.markdown(f"""
+        <div style="background:{'#1e293b' if st.session_state['dark_mode'] else '#1e3a8a'}; color:white; padding:30px; border-radius:12px; margin-bottom:20px;">
+            <h2 style="margin:0; color:white !important;">{sel_d.strftime('%A, %B %d, %Y')}</h2>
+            <div style="font-size:3rem; font-weight:800;">{format_m3(tot)}</div>
+            <div style="font-size:1rem; margin-top:10px;">
+                Expected Daily: <span style="font-weight:600;">{format_m3(expected_daily)}</span> | 
+                Monthly Forecast: <span style="font-weight:600;">{format_m3(month_forecast)}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.dataframe(df, use_container_width=True)
+        
+        st.markdown("### 📊 Daily Analysis")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Production Share**")
+            fig = px.pie(df, names='Plant', values='Production for the Day', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+        with c2:
+            st.markdown("**Production Volume**")
+            fig = px.bar(df, x='Plant', y='Production for the Day', color='Plant', text='Plant', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig), use_container_width=True)
+            
+        st.markdown("### 📈 Accumulative Analysis")
+        c3, c4 = st.columns(2)
+        with c3:
+            st.markdown("**Accumulative by Plant**")
+            fig_acc_bar = px.bar(df, x='Plant', y='Accumulative Production', color='Plant', text='Plant', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig_acc_bar), use_container_width=True)
+        with c4:
+            st.markdown("**Accumulative Share**")
+            fig_acc_pie = px.pie(df, names='Plant', values='Accumulative Production', color_discrete_sequence=current_theme_colors)
+            st.plotly_chart(apply_chart_theme(fig_acc_pie), use_container_width=True)
+        
+        # NEW: Actual vs Expected Chart for Historical View
+        st.markdown("### 🎯 Actual vs Expected Production")
+        
+        # Create comparison data
+        comparison_data = pd.DataFrame({
+            'Metric': ['Actual Production', 'Expected Production'],
+            'Value': [tot, expected_daily],
+            'Color': ['#3b82f6', '#ef4444']
+        })
+        
+        fig_comparison = px.bar(
+            comparison_data, 
+            x='Metric', 
+            y='Value', 
+            color='Metric',
+            title=f"Daily Production Comparison for {sel_d.strftime('%B %d, %Y')}",
+            color_discrete_map={'Actual Production': '#3b82f6', 'Expected Production': '#ef4444'},
+            text=comparison_data['Value'].apply(lambda x: format_m3(x))
+        )
+        fig_comparison.update_traces(textposition='outside')
+        fig_comparison.update_layout(showlegend=False)
+        st.plotly_chart(apply_chart_theme(fig_comparison), use_container_width=True)
+
+# ========================================
+# MODULE 5: AUDIT LOGS (MANAGER ONLY)
+# ========================================
+elif mode == "Audit Logs":
+    if user != "manager": st.error("Access Restricted"); st.stop()
+    st.title("Security Audit Logs")
+    
+    # Filter Controls
+    log_date = st.date_input("Filter by Date", value=datetime.today())
+    
+    logs = get_logs()
+    if not logs.empty:
+        logs['Timestamp'] = pd.to_datetime(logs['Timestamp'])
+        # Filter Logic
+        start_ts = pd.to_datetime(log_date)
+        end_ts = start_ts + timedelta(days=1)
+        daily_logs = logs[(logs['Timestamp'] >= start_ts) & (logs['Timestamp'] < end_ts)].sort_values('Timestamp', ascending=False)
+        
+        st.markdown(f"**Showing logs for: {log_date.strftime('%Y-%m-%d')}**")
+        st.dataframe(daily_logs, use_container_width=True, height=500)
+        st.download_button("Export CSV", daily_logs.to_csv(index=False).encode(), "logs.csv", "text/csv")
+    else:
+        st.info("No logs found.")
+
+# ========================================
+# FOOTER
+# ========================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
+    <strong>Eng. Ashwin Joseph Mathew</strong><br>
+    Head of IT<br>
+    <a href="mailto:Ashwin.IT@kbrc.com.kw" style="color:#3b82f6; text-decoration:none;">Ashwin.IT@kbrc.com.kw</a>
+</div>
+""", unsafe_allow_html=True)
+
+# Debug information (only show if needed)
+if st.sidebar.checkbox("Show Debug Info", False):
+    st.sidebar.write("Data Directory:", DATA_DIR)
+    st.sidebar.write("Forecast Directory:", FORECAST_DIR)
+    st.sidebar.write("GitHub Token:", "Set" if GITHUB_TOKEN else "Not Set")
+    st.sidebar.write("GitHub Repo:", GITHUB_REPO if GITHUB_REPO else "Not Set")
+    
+    if FORECAST_DIR.exists():
+        forecast_files = list(FORECAST_DIR.glob("*.txt"))
+        st.sidebar.write(f"Forecast files: {len(forecast_files)}")
+        for f in forecast_files:
+            st.sidebar.write(f"- {f.name}")
+
